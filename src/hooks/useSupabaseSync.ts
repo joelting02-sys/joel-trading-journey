@@ -32,34 +32,37 @@ export function useSupabaseSync() {
     console.log("[sync] 启动同步, user:", user.id);
 
     // 先加载云端数据到本地
-    const loadFromSupabase = async () => {
-      try {
-        const [accounts, trades, sopRules, settings] = await Promise.all([
-          fetchAccounts(user.id),
-          fetchTrades(user.id),
-          fetchSopRules(user.id),
-          fetchUserSettings(user.id),
-        ]);
-        console.log("[sync] 从 Supabase 加载:", {
-          accounts: accounts.length,
-          trades: trades.length,
-          sopRules: sopRules.length,
-          settings: settings ? "有" : "无",
-        });
-        useTradeStore.getState().setAccounts(accounts);
-        useTradeStore.getState().setTrades(trades);
-        useSettings.getState().setSopRules(sopRules);
-        if (settings) {
-          useSettings.getState().setLanguage(settings.language);
-          useSettings.getState().setCurrency(settings.currency as "USD" | "EUR" | "GBP" | "JPY" | "MYR");
-          useSettings.getState().setAiConfig(settings.aiConfig);
-          useSettings.getState().setChatMessages(settings.chatMessages);
+    useEffect(() => {
+      if (!user || !isSupabaseConfigured()) return;
+      const loadFromSupabase = async () => {
+        try {
+          const [accounts, trades, sopRules, settings] = await Promise.all([
+            fetchAccounts(user.id),
+            fetchTrades(user.id),
+            fetchSopRules(user.id),
+            fetchUserSettings(user.id),
+          ]);
+          console.log("[sync] 从 Supabase 加载:", {
+            accounts: accounts.length,
+            trades: trades.length,
+            sopRules: sopRules.length,
+            settings: settings ? "有" : "无",
+          });
+          useTradeStore.getState().setAccounts(accounts);
+          useTradeStore.getState().setTrades(trades);
+          useSettings.getState().setSopRules(sopRules);
+          if (settings) {
+            useSettings.getState().setLanguage(settings.language);
+            useSettings.getState().setCurrency(settings.currency as "USD" | "EUR" | "GBP" | "JPY" | "MYR");
+            useSettings.getState().setAiConfig(settings.aiConfig);
+            useSettings.getState().setChatMessages(settings.chatMessages);
+          }
+        } catch (err) {
+          console.error("[sync] ❌ 加载数据失败:", err);
         }
-      } catch (err) {
-        console.error("[sync] ❌ 加载数据失败:", err);
-      }
-    };
-    loadFromSupabase();
+      };
+      loadFromSupabase();
+    }, [user]);
 
     // Trade 同步
     const unsubTrades = useTradeStore.subscribe((state) => {
