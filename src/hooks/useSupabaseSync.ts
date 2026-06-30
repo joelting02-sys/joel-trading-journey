@@ -30,8 +30,36 @@ export function useSupabaseSync() {
     if (!user || !isSupabaseConfigured()) return;
 
     console.log("[sync] 启动同步, user:", user.id);
-    console.log("[sync] 当前本地 trades:", useTradeStore.getState().trades.length);
-    console.log("[sync] 当前本地 accounts:", useTradeStore.getState().accounts.length);
+
+    // 先加载云端数据到本地
+    const loadFromSupabase = async () => {
+      try {
+        const [accounts, trades, sopRules, settings] = await Promise.all([
+          fetchAccounts(user.id),
+          fetchTrades(user.id),
+          fetchSopRules(user.id),
+          fetchUserSettings(user.id),
+        ]);
+        console.log("[sync] 从 Supabase 加载:", {
+          accounts: accounts.length,
+          trades: trades.length,
+          sopRules: sopRules.length,
+          settings: settings ? "有" : "无",
+        });
+        useTradeStore.getState().setAccounts(accounts);
+        useTradeStore.getState().setTrades(trades);
+        useSettings.getState().setSopRules(sopRules);
+        if (settings) {
+          useSettings.getState().setLanguage(settings.language);
+          useSettings.getState().setCurrency(settings.currency as "USD" | "EUR" | "GBP" | "JPY" | "MYR");
+          useSettings.getState().setAiConfig(settings.aiConfig);
+          useSettings.getState().setChatMessages(settings.chatMessages);
+        }
+      } catch (err) {
+        console.error("[sync] ❌ 加载数据失败:", err);
+      }
+    };
+    loadFromSupabase();
 
     // Trade 同步
     const unsubTrades = useTradeStore.subscribe((state) => {
@@ -39,6 +67,7 @@ export function useSupabaseSync() {
       const next = state.trades;
       const nextIds = new Set(next.map((t) => t.id));
       const prevIds = new Set(prev.map((t) => t.id));
+      // 新增或更新
       next.forEach((t) => {
         if (!prevIds.has(t.id) || prev.find((p) => p.id === t.id) !== t) {
           console.log("[sync] upsert trade:", t.id, t.symbol, "→ user:", user.id);
@@ -47,6 +76,7 @@ export function useSupabaseSync() {
             .catch((e) => console.error("[sync] ❌ trade upsert failed:", e));
         }
       });
+      // 删除
       prev.forEach((t) => {
         if (!nextIds.has(t.id)) {
           console.log("[sync] delete trade:", t.id);
@@ -66,7 +96,12 @@ export function useSupabaseSync() {
         if (!prevIds.has(a.id) || prev.find((p) => p.id === a.id) !== a) {
           console.log("[sync] upsert account:", a.id, a.name, "→ user:", user.id);
           upsertAccount(a, user.id)
-            .then(() => console.log("[sync] ✅ account saved:", a.id))
+            .then(() => {
+              console.log("[sync] ✅ account saved:", a.id);
+              // 确保本地数据和云端一致
+              const updatedAccounts = [...next];
+              useTradeStore.getState().setAccounts(updatedAccounts);
+            })
             .catch((e) => console.error("[sync] ❌ account upsert failed:", e));
         }
       });
