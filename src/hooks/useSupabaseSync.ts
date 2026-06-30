@@ -12,6 +12,10 @@ import {
   upsertSopRule,
   deleteSopRuleFromDb,
   upsertUserSettings,
+  fetchAccounts,
+  fetchTrades,
+  fetchSopRules,
+  fetchUserSettings,
 } from "@/services/dataService";
 
 export function useSupabaseSync() {
