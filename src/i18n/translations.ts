@@ -13,16 +13,6 @@ export const translations = {
       sop: "SOP",
       settings: "Settings",
     },
-    // Auth
-    auth: {
-      login: "Log In",
-      signup: "Sign Up",
-      logout: "Log Out",
-      noAccount: "No account?",
-      haveAccount: "Have an account?",
-      email: "Email",
-      password: "Password",
-    },
     // Page titles
     title: {
       dashboard: "Dashboard",
@@ -239,16 +229,6 @@ export const translations = {
       assistant: "AI 助手",
       sop: "SOP",
       settings: "设置",
-    },
-    // Auth
-    auth: {
-      login: "登录",
-      signup: "注册",
-      logout: "退出登录",
-      noAccount: "还没有账号?",
-      haveAccount: "已有账号?",
-      email: "邮箱",
-      password: "密码",
     },
     dashboard: {
       totalEquity: "总权益",
