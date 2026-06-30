@@ -70,6 +70,7 @@ function useHydrateOnLogin() {
     let cancelled = false;
     (async () => {
       try {
+        console.log("[hydrate] 开始加载数据, user:", user.id);
         const [fetchedAccounts, fetchedTrades, fetchedSop, fetchedSettings] = await Promise.all([
           fetchAccounts(user.id),
           fetchTrades(user.id),
@@ -77,6 +78,12 @@ function useHydrateOnLogin() {
           fetchUserSettings(user.id),
         ]);
         if (cancelled) return;
+        console.log("[hydrate] 从 Supabase 获取:", {
+          accounts: fetchedAccounts.length,
+          trades: fetchedTrades.length,
+          sop: fetchedSop.length,
+          settings: fetchedSettings ? "有" : "无",
+        });
         setAccounts(fetchedAccounts);
         setTrades(fetchedTrades);
         if (fetchedAccounts[0]) setActiveAccountId(fetchedAccounts[0].id);
@@ -89,7 +96,7 @@ function useHydrateOnLogin() {
         }
         setHydrated(true);
       } catch (err) {
-        console.error("[hydrate] failed:", err);
+        console.error("[hydrate] ❌ failed:", err);
         setHydrated(true);
       }
     })();
