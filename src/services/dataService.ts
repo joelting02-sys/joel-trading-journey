@@ -116,19 +116,25 @@ function accountToDb(acc: Account, userId: string): Partial<DbAccount> {
 
 // ===== Accounts =====
 export async function fetchAccounts(userId: string): Promise<Account[]> {
-  const { data, error } = await supabase
+  console.log("[dataService] fetchAccounts userId:", userId);
+  const { data, error, status, statusText } = await supabase
     .from("accounts")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
+  console.log("[dataService] fetchAccounts result:", { data, error, status, statusText, count: data?.length });
   if (error) throw error;
   return (data ?? []).map(dbToAccount);
 }
 
 export async function upsertAccount(acc: Account, userId: string): Promise<void> {
-  const { error } = await supabase
+  const payload = accountToDb(acc, userId);
+  console.log("[dataService] upsertAccount payload:", payload);
+  const { data, error, status, statusText } = await supabase
     .from("accounts")
-    .upsert(accountToDb(acc, userId));
+    .upsert(payload)
+    .select();
+  console.log("[dataService] upsertAccount result:", { data, error, status, statusText });
   if (error) throw error;
 }
 
