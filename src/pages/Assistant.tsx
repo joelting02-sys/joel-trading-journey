@@ -155,7 +155,16 @@ export default function Assistant() {
     // P&L 只算价格×数量的差异,绝不包括手续费
     const pnlRaw = calcPreviewPnl({ entryPrice: entry, exitPrice: exit, quantity: qty, direction, symbol: ex.symbol });
     const pnl = Number(pnlRaw.toFixed(2));
-    const pnlPercent = entry > 0 && pnlRaw !== 0 ? (pnlRaw / (entry * qty)) * 100 : 0;
+    // P&L 百分比 = 盈亏 / 合约名义价值 × 100
+    // 合约名义价值 = entry × qty × 合约大小
+    const sym = (ex.symbol || "").toUpperCase().replace(/[\s/]/g, "");
+    const forexPairs = ["EURUSD", "AUDUSD", "GBPUSD", "USDJPY", "USDCAD", "NZDUSD", "USDCHF", "EURJPY", "GBPJPY", "AUDJPY", "EURAUD", "EURGBP", "AUDNZD", "CADJPY"];
+    let contractSize = 1;
+    if (forexPairs.includes(sym)) contractSize = 100000;
+    else if (sym === "XAUUSD") contractSize = 100;
+    else if (sym === "XAGUSD") contractSize = 5000;
+    const notional = entry * qty * contractSize;
+    const pnlPercent = notional > 0 ? (pnlRaw / notional) * 100 : 0;
     // fee 单独存(负数),不合并到 P&L
     const fee = ex.fee ?? 0;
     return {
