@@ -61,6 +61,8 @@ export default function Assistant() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  // ref 用来同步跟踪保存状态,避免 React state 异步更新导致重复保存
+  const savedKeysRef = useRef<Set<string>>(new Set());
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,15 +187,21 @@ export default function Assistant() {
   }
 
   function handleSaveOne(msgId: string, ex: Partial<Trade>, index: number, accountId: string) {
-    addTrade(buildTradeFromExtracted(ex, index, accountId));
-    setSavedKeys((s) => new Set(s).add(`${msgId}_${index}`));
+    const key = `${msgId}_${index}`;
+    if (savedKeysRef.current.has(key)) return; // 已保存过,直接返回
+    const trade = buildTradeFromExtracted(ex, index, accountId);
+    addTrade(trade);
+    savedKeysRef.current.add(key);
+    setSavedKeys((s) => {
+      const next = new Set(s);
+      next.add(key);
+      return next;
+    });
   }
 
   function handleSaveAll(msgId: string, trades: Partial<Trade>[], accountId: string) {
     trades.forEach((ex, idx) => {
-      if (!savedKeys.has(`${msgId}_${idx}`)) {
-        handleSaveOne(msgId, ex, idx, accountId);
-      }
+      handleSaveOne(msgId, ex, idx, accountId);
     });
   }
 
