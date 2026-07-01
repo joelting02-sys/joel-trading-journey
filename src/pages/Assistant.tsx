@@ -505,18 +505,18 @@ function calcPreviewPnl(t: { entryPrice?: number | string; exitPrice?: number | 
   // 基础 P&L（按 1 单位 × 价格差计算）
   const basePnl = t.direction === "long" ? diff * qty : -diff * qty;
   // 对于外汇对，价格差太小，需要乘以合约大小
-  const sym = (t.symbol || "").toUpperCase();
-  // 外汇对（价格是 5 位或 3 位小数）
-  const isForex = /^(EUR|AUD|GBP|USD|NZD|CHF|CAD|JPY)\//.test(sym) || /\/(EUR|AUD|GBP|USD|NZD|CHF|CAD|JPY)$/.test(sym);
-  if (isForex) {
+  const sym = (t.symbol || "").toUpperCase().replace(/[\s/]/g, "");
+  // 外汇对（支持 NZDUSD, NZD/USD, AUDUSD 等所有格式）
+  const forexPairs = ["EURUSD", "AUDUSD", "GBPUSD", "USDJPY", "USDCAD", "NZDUSD", "USDCHF", "EURJPY", "GBPJPY", "AUDJPY", "EURAUD", "EURGBP", "AUDNZD", "CADJPY"];
+  if (forexPairs.includes(sym)) {
     // 1 lot = 100,000 units
     return basePnl * 100000;
   }
-  if (sym === "XAU/USD") {
+  if (sym === "XAUUSD") {
     // 黄金 1 lot = 100 oz
     return basePnl * 100;
   }
-  if (sym === "XAG/USD") {
+  if (sym === "XAGUSD") {
     // 白银 1 lot = 5000 oz
     return basePnl * 5000;
   }
