@@ -153,10 +153,9 @@ export default function Assistant() {
     const qty = ex.quantity && ex.quantity > 0 ? ex.quantity : 1;
     const direction: Direction = ex.direction === "short" ? "short" : "long";
     // P&L 只算价格×数量的差异,绝不包括手续费
-    const pnl = entry && exit
-      ? (direction === "long" ? (exit - entry) : (entry - exit)) * qty
-      : 0;
-    const pnlPercent = entry > 0 ? (pnl / (entry * qty)) * 100 : 0;
+    const pnlRaw = calcPreviewPnl({ entryPrice: entry, exitPrice: exit, quantity: qty, direction, symbol: ex.symbol });
+    const pnl = Number(pnlRaw.toFixed(2));
+    const pnlPercent = entry > 0 && pnlRaw !== 0 ? (pnlRaw / (entry * qty)) * 100 : 0;
     // fee 单独存(负数),不合并到 P&L
     const fee = ex.fee ?? 0;
     return {
@@ -387,16 +386,46 @@ function MessageBubble({
             <div className="mb-2.5 space-y-1">
               {trades.map((ex, idx) => {
                 const isSaved = savedKeys.has(`${msg.id}_${idx}`);
+                // 计算 P&L：手续费前的盈亏
+                const pnl = calcPreviewPnl(ex);
+                const fee = Number(ex.fee) || 0;
+                const net = pnl + fee; // 净盈亏 = P&L + 手续费(负数)
+                const pnlColor = pnl > 0 ? "text-primary" : pnl < 0 ? "text-loss" : "text-text-muted";
+                const netColor = net > 0 ? "text-primary" : net < 0 ? "text-loss" : "text-text-muted";
                 return (
-                  <div key={idx} className="flex items-center justify-between gap-2 rounded-sm bg-bg-surface/60 px-2 py-1 text-xs">
-                    <span className="tj-number font-medium text-text">
-                      #{idx + 1} {ex.symbol} {ex.direction === "long" ? "↗" : "↘"}
-                      {ex.quantity ? <span className="ml-1 text-text-muted">×{ex.quantity}</span> : null}
-                    </span>
-                    <span className="tj-number text-text-secondary">
-                      @ {ex.entryPrice} → {ex.exitPrice || "—"}
-                    </span>
-                    {isSaved && <CheckCircle className="h-3.5 w-3.5 text-primary" />}
+                  <div key={idx} className="flex flex-col gap-0.5 rounded-sm bg-bg-surface/60 px-2 py-1.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="tj-number font-medium text-text">
+                        #{idx + 1} {ex.symbol} {ex.direction === "long" ? "↗" : "↘"}
+                        {ex.quantity ? <span className="ml-1 text-text-muted">×{ex.quantity}</span> : null}
+                      </span>
+                      <span className="tj-number text-text-secondary">
+                        @ {ex.entryPrice} → {ex.exitPrice || "—"}
+                      </span>
+                      {isSaved && <CheckCircle className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    <div className="flex items-center gap-3 pl-4 text-[11px]">
+                      <span className="text-text-muted">
+                        {language === "zh" ? "盈亏" : "P&L"}:{" "}
+                        <span className={`tj-number font-semibold ${pnlColor}`}>
+                          {formatSigned(pnl)}
+                        </span>
+                      </span>
+                      {fee !== 0 && (
+                        <span className="text-text-muted">
+                          {language === "zh" ? "手续费" : "Fee"}:{" "}
+                          <span className="tj-number font-semibold text-loss">
+                            {formatSigned(fee)}
+                          </span>
+                        </span>
+                      )}
+                      <span className="text-text-muted">
+                        {language === "zh" ? "净盈亏" : "Net"}:{" "}
+                        <span className={`tj-number font-semibold ${netColor}`}>
+                          {formatSigned(net)}
+                        </span>
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -455,4 +484,49 @@ function MessageBubble({
       </div>
     </div>
   );
+}
+
+// 计算预览用 P&L（不含手续费）
+// 外汇/期货/指数的合约大小不同，这里用通用逻辑：
+//   - 外汇对: 1 lot = 100,000 单位
+//   - 黄金/白银 (XAU/USD, XAG/USD): 1 lot = 100 oz
+//   - 铜 (Copper): 1 lot = 25,000 lb
+//   - 指数 (US500, US30): 1 lot = 1 合约
+//  quantity 单位是 lot
+function calcPreviewPnl(t: { entryPrice?: number | string; exitPrice?: number | string; quantity?: number | string; direction?: "long" | "short"; symbol?: string }): number {
+  const entry = Number(t.entryPrice) || 0;
+  const exit = Number(t.exitPrice) || 0;
+  const qty = Number(t.quantity) || 0;
+  if (!entry || !exit || !qty) {
+    console.log("[calcPreviewPnl] missing data:", { entry, exit, qty, raw: t });
+    return 0;
+  }
+  const diff = exit - entry;
+  // 基础 P&L（按 1 单位 × 价格差计算）
+  const basePnl = t.direction === "long" ? diff * qty : -diff * qty;
+  // 对于外汇对，价格差太小，需要乘以合约大小
+  const sym = (t.symbol || "").toUpperCase();
+  // 外汇对（价格是 5 位或 3 位小数）
+  const isForex = /^(EUR|AUD|GBP|USD|NZD|CHF|CAD|JPY)\//.test(sym) || /\/(EUR|AUD|GBP|USD|NZD|CHF|CAD|JPY)$/.test(sym);
+  if (isForex) {
+    // 1 lot = 100,000 units
+    return basePnl * 100000;
+  }
+  if (sym === "XAU/USD") {
+    // 黄金 1 lot = 100 oz
+    return basePnl * 100;
+  }
+  if (sym === "XAG/USD") {
+    // 白银 1 lot = 5000 oz
+    return basePnl * 5000;
+  }
+  // 指数/铜：1 lot = 1 合约（不需要再乘）
+  return basePnl;
+}
+
+// 格式化带符号数字（美元货币）
+function formatSigned(n: number): string {
+  if (n === 0) return "$0.00";
+  const sign = n > 0 ? "+" : "−";
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
