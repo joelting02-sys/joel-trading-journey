@@ -20,7 +20,7 @@ import {
   readDataFileText,
   type DataLocation,
 } from "@/services/dataStorage";
-import { triggerSync } from "@/services/syncService";
+import { triggerSupabaseSync, getSupabaseClient } from "@/services/supabaseService";
 
 export default function Settings() {
   const accounts = useTradeStore((s) => s.accounts);
@@ -60,7 +60,12 @@ export default function Settings() {
   const [syncError, setSyncError] = useState("");
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState("");
-  const [showPasscode, setShowPasscode] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [showSupabasePassword, setShowSupabasePassword] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
 
   async function handleCloudSync() {
     setSyncingCloud(true);
@@ -68,7 +73,7 @@ export default function Settings() {
     setSyncSuccess(false);
     setSyncStatusMsg("");
     try {
-      const res = await triggerSync();
+      const res = await triggerSupabaseSync();
       if (res.success) {
         setSyncSuccess(true);
         if (res.status === "synced") {
@@ -87,6 +92,68 @@ export default function Settings() {
       setSyncError((e as Error).message || "Sync failed");
     } finally {
       setSyncingCloud(false);
+    }
+  }
+
+  async function handleAuth() {
+    if (!email.trim() || !password) {
+      setSyncError(language === "zh" ? "请输入邮箱和密码" : "Please enter email and password");
+      return;
+    }
+    setAuthenticating(true);
+    setSyncError("");
+    setSyncSuccess(false);
+    setSyncStatusMsg("");
+    try {
+      const client = getSupabaseClient();
+      if (!client) {
+        throw new Error(language === "zh" ? "请先配置并保存 Supabase URL 和 Anon Key" : "Please configure Supabase URL and Anon Key first");
+      }
+
+      if (authMode === "login") {
+        const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+        if (data.session && data.user) {
+          useSettings.setState({
+            supabaseUserEmail: data.user.email || "",
+            supabaseSessionToken: data.session.access_token || ""
+          });
+          // Wait a bit and trigger initial sync
+          setTimeout(handleCloudSync, 200);
+        }
+      } else {
+        const { data, error } = await client.auth.signUp({ email: email.trim(), password });
+        if (error) throw error;
+        setSyncSuccess(true);
+        setSyncStatusMsg(language === "zh" ? "注册成功！请检查你的邮箱以确认账号，或直接尝试登录。" : "Sign up successful! Please check your email or try logging in.");
+        setAuthMode("login");
+      }
+    } catch (e) {
+      setSyncError((e as Error).message || "Auth failed");
+    } finally {
+      setAuthenticating(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setSyncError("");
+    setSyncSuccess(false);
+    setSyncStatusMsg("");
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        await client.auth.signOut();
+      }
+    } catch (e) {
+      // Ignore auth error on sign out
+    } finally {
+      useSettings.setState({
+        supabaseUserEmail: "",
+        supabaseSessionToken: "",
+        lastSyncedAt: 0
+      });
+      setEmail("");
+      setPassword("");
     }
   }
 
@@ -461,14 +528,14 @@ export default function Settings() {
           )}
         </SettingsSection>
 
-        {/* Cloud Database Sync */}
+        {/* Supabase Cloud Sync */}
         <SettingsSection
           icon={<RefreshCw className="h-4 w-4" />}
-          title={language === "zh" ? "云端数据库同步" : "Cloud Database Sync"}
+          title={language === "zh" ? "Supabase 云端账号同步" : "Supabase Cloud Sync"}
           description={
             language === "zh"
-              ? "使用 Cloudflare D1 数据库在手机和电脑之间同步你的交易记录。"
-              : "Sync your journal data between mobile and desktop devices using Cloudflare D1."
+              ? "使用 Supabase 用户认证与 Postgres 数据库，在手机与电脑之间多端同步你的交易日志。"
+              : "Sync your journal data between mobile and desktop devices using Supabase Auth & Postgres."
           }
         >
           {syncError && (
@@ -485,64 +552,159 @@ export default function Settings() {
           )}
 
           <div className="flex flex-col gap-4">
-            <ToggleRow
-              label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
-              hint={
-                language === "zh"
-                  ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
-                  : "Automatically sync data to the cloud in the background when changes are made."
-              }
-              checked={useSettings((s) => s.syncEnabled)}
-              onChange={(val) => {
-                useSettings.setState({ syncEnabled: val });
-                // If turning on, run an initial sync
-                if (val && (useSettings.getState().syncPasscode || "").trim()) {
-                  setTimeout(handleCloudSync, 100);
-                }
-              }}
-            />
-
-            <Field label={language === "zh" ? "同步密码 (Sync Key)" : "Sync Key"}>
-              <div className="relative flex items-center">
+            {/* Supabase Credentials */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Supabase URL">
                 <input
-                  type={showPasscode ? "text" : "password"}
-                  value={useSettings((s) => s.syncPasscode) || ""}
-                  onChange={(e) => useSettings.setState({ syncPasscode: e.target.value })}
-                  placeholder={language === "zh" ? "请输入你的同步密码" : "Enter sync passcode"}
-                  className={`${inputClass} pr-10`}
+                  type="text"
+                  value={useSettings((s) => s.supabaseUrl) || ""}
+                  onChange={(e) => useSettings.setState({ supabaseUrl: e.target.value.trim() })}
+                  placeholder="https://your-project.supabase.co"
+                  className={inputClass}
+                  disabled={!!useSettings((s) => s.supabaseSessionToken)}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPasscode(!showPasscode)}
-                  className="absolute right-3 text-text-muted hover:text-text"
-                >
-                  {showPasscode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <span className="text-xs text-text-muted">
-                {language === "zh"
-                  ? "输入一个自定义的加密密码。在手机和电脑上输入相同的密码即可共享同一个云数据库。"
-                  : "Enter a custom passcode. Use the exact same passcode on both mobile and desktop to share data."}
-              </span>
-            </Field>
+              </Field>
+              <Field label="Supabase Anon Key">
+                <input
+                  type="password"
+                  value={useSettings((s) => s.supabaseAnonKey) || ""}
+                  onChange={(e) => useSettings.setState({ supabaseAnonKey: e.target.value.trim() })}
+                  placeholder="your-anon-key"
+                  className={inputClass}
+                  disabled={!!useSettings((s) => s.supabaseSessionToken)}
+                />
+              </Field>
+            </div>
 
-            {useSettings((s) => s.syncEnabled) && (useSettings((s) => s.syncPasscode) || "").trim() && (
-              <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloudSync}
-                  disabled={syncingCloud}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
-                  {language === "zh" ? "立即手动同步" : "Sync Now"}
-                </button>
-                {(useSettings((s) => s.lastSyncedAt) || 0) > 0 && (
-                  <span className="text-xs text-text-muted">
-                    {language === "zh" ? "上次同步时间: " : "Last synced: "}
-                    {new Date(useSettings((s) => s.lastSyncedAt) || 0).toLocaleString()}
-                  </span>
-                )}
+            {/* Authentication Form / Logged in status */}
+            {useSettings((s) => s.supabaseSessionToken) ? (
+              <div className="rounded-md border border-border bg-bg-surface/50 p-4">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs text-text-muted block">
+                        {language === "zh" ? "已登录账号" : "Logged in as"}
+                      </span>
+                      <span className="text-sm font-medium text-text">
+                        {useSettings((s) => s.supabaseUserEmail)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="rounded-md border border-loss/30 px-3 py-1.5 text-xs font-medium text-loss transition-colors hover:bg-loss/5"
+                    >
+                      {language === "zh" ? "退出登录" : "Logout"}
+                    </button>
+                  </div>
+
+                  <div className="border-t border-border pt-3 mt-1">
+                    <ToggleRow
+                      label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
+                      hint={
+                        language === "zh"
+                          ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
+                          : "Automatically sync data to the cloud in the background when changes are made."
+                      }
+                      checked={useSettings((s) => s.syncEnabled)}
+                      onChange={(val) => {
+                        useSettings.setState({ syncEnabled: val });
+                        if (val) {
+                          setTimeout(handleCloudSync, 100);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {useSettings((s) => s.syncEnabled) && (
+                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 mt-1">
+                      <button
+                        type="button"
+                        onClick={handleCloudSync}
+                        disabled={syncingCloud}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
+                        {language === "zh" ? "立即同步" : "Sync Now"}
+                      </button>
+                      {(useSettings((s) => s.lastSyncedAt) || 0) > 0 && (
+                        <span className="text-xs text-text-muted">
+                          {language === "zh" ? "上次同步时间: " : "Last synced: "}
+                          {new Date(useSettings((s) => s.lastSyncedAt) || 0).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-border bg-bg-surface/50 p-4">
+                <div className="mb-4 border-b border-border pb-2 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode("login"); setSyncError(""); }}
+                    className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "login" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                  >
+                    {language === "zh" ? "账号登录" : "Login"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode("register"); setSyncError(""); }}
+                    className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "register" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                  >
+                    {language === "zh" ? "注册新账号" : "Register"}
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <Field label={language === "zh" ? "邮箱" : "Email"}>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      className={inputClass}
+                      disabled={!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                    />
+                  </Field>
+                  <Field label={language === "zh" ? "密码" : "Password"}>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showSupabasePassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`${inputClass} pr-10`}
+                        disabled={!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSupabasePassword(!showSupabasePassword)}
+                        className="absolute right-3 text-text-muted hover:text-text"
+                      >
+                        {showSupabasePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </Field>
+
+                  <button
+                    type="button"
+                    onClick={handleAuth}
+                    disabled={authenticating || !useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                    className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 mt-2"
+                  >
+                    {authenticating ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                    {authMode === "login"
+                      ? (language === "zh" ? "登 录" : "Log In")
+                      : (language === "zh" ? "注 册" : "Sign Up")}
+                  </button>
+
+                  {(!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)) && (
+                    <p className="text-xs text-warning mt-1">
+                      {language === "zh" ? "⚠️ 请先在上方配置 Supabase URL 与 Anon Key 凭证才能登录。" : "⚠️ Please enter your Supabase URL & Anon Key credentials first."}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

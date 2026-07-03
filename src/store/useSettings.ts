@@ -22,7 +22,7 @@ import {
   loadSettingsFromDisk,
   loadSopFromDisk,
 } from "@/services/dataStorage";
-import { onDataMutation } from "@/services/syncService";
+import { onDataMutation } from "@/services/supabaseService";
 
 export type CurrencyCode = "USD" | "EUR" | "GBP" | "JPY" | "MYR";
 
@@ -147,7 +147,10 @@ interface SettingsStore {
   positionCalcHistory: PositionCalcRecord[];
 
   // 云端同步配置
-  syncPasscode: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  supabaseUserEmail: string;
+  supabaseSessionToken: string;
   syncEnabled: boolean;
   lastSyncedAt: number;
   clientUpdatedAt: number;
@@ -175,7 +178,10 @@ interface SettingsStore {
   addPositionCalcRecord: (record: PositionCalcRecord) => void;
   deletePositionCalcRecord: (id: string) => void;
   
-  setSyncPasscode: (code: string) => void;
+  setSupabaseUrl: (url: string) => void;
+  setSupabaseAnonKey: (key: string) => void;
+  setSupabaseUserEmail: (email: string) => void;
+  setSupabaseSessionToken: (token: string) => void;
   setSyncEnabled: (enabled: boolean) => void;
   setLastSyncedAt: (ts: number) => void;
   updateClientTimestamp: () => void;
@@ -229,11 +235,17 @@ export const useSettings = create<SettingsStore>()(
       preMarketChecks: [],
       positionCalcHistory: [],
       
-      syncPasscode: "",
+      supabaseUrl: "",
+      supabaseAnonKey: "",
+      supabaseUserEmail: "",
+      supabaseSessionToken: "",
       syncEnabled: false,
       lastSyncedAt: 0,
       clientUpdatedAt: 0,
-      setSyncPasscode: (code) => set({ syncPasscode: code }),
+      setSupabaseUrl: (url) => set({ supabaseUrl: url }),
+      setSupabaseAnonKey: (key) => set({ supabaseAnonKey: key }),
+      setSupabaseUserEmail: (email) => set({ supabaseUserEmail: email }),
+      setSupabaseSessionToken: (token) => set({ supabaseSessionToken: token }),
       setSyncEnabled: (enabled) => set({ syncEnabled: enabled }),
       setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
       updateClientTimestamp: () => set({ clientUpdatedAt: Date.now() }),
@@ -363,7 +375,7 @@ export const useSettings = create<SettingsStore>()(
     {
       name: "tj-settings-store",
       storage: settingsDualStorage,
-      version: 6,
+      version: 7,
       // 持久化配置和聊天记录(聊天图片已压缩,不会超限)
       partialize: ((state: SettingsStore) => ({
         language: state.language,
@@ -377,13 +389,16 @@ export const useSettings = create<SettingsStore>()(
         calendarUpdatedAt: state.calendarUpdatedAt,
         preMarketChecks: state.preMarketChecks,
         positionCalcHistory: state.positionCalcHistory,
-        syncPasscode: state.syncPasscode,
+        supabaseUrl: state.supabaseUrl,
+        supabaseAnonKey: state.supabaseAnonKey,
+        supabaseUserEmail: state.supabaseUserEmail,
+        supabaseSessionToken: state.supabaseSessionToken,
         syncEnabled: state.syncEnabled,
         lastSyncedAt: state.lastSyncedAt,
         clientUpdatedAt: state.clientUpdatedAt,
       })) as (state: SettingsStore) => SettingsStore,
       migrate: ((persistedState: unknown, version: number) => {
-        const s = persistedState as Partial<SettingsStore> & { aiConfig?: AiConfig };
+        const s = persistedState as Partial<SettingsStore> & { aiConfig?: AiConfig; syncPasscode?: string };
         // 从 v1 迁移: 如果用户仍在使用旧版英文默认规则,替换为当前语言的版本
         if (version < 2 && s.sopRules && s.language) {
           const isOldDefault =
@@ -427,6 +442,16 @@ export const useSettings = create<SettingsStore>()(
           s.syncEnabled = false;
           s.lastSyncedAt = 0;
           s.clientUpdatedAt = 0;
+        }
+        // v6→v7: 迁移到 Supabase 凭据并清理旧的 syncPasscode
+        if (version < 7) {
+          s.supabaseUrl = "";
+          s.supabaseAnonKey = "";
+          s.supabaseUserEmail = "";
+          s.supabaseSessionToken = "";
+          if (s.syncPasscode) {
+            delete s.syncPasscode;
+          }
         }
         return s as unknown as SettingsStore;
       }) as (persistedState: unknown, version: number) => SettingsStore,

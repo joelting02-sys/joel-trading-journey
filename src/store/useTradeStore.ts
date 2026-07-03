@@ -8,7 +8,7 @@ import {
   loadTradesFromDisk,
   loadAccountsFromDisk,
 } from "@/services/dataStorage";
-import { onDataMutation } from "@/services/syncService";
+import { onDataMutation } from "@/services/supabaseService";
 
 // 不预设任何账号和交易记录,首次使用为空
 const initialTrades: Trade[] = [];

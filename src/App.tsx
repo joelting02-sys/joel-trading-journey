@@ -15,6 +15,7 @@ import TradeDetail from "@/pages/TradeDetail";
 import { tryRestoreDirectory } from "@/services/dataStorage";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
+import { initializeSupabaseListener } from "@/services/supabaseService";
 
 export default function App() {
   // 启动时尝试恢复已保存的目录句柄,然后从磁盘 hydrate
@@ -25,6 +26,7 @@ export default function App() {
         await useTradeStore.getState().hydrateFromDisk();
         await useSettings.getState().hydrateFromDisk();
       }
+      initializeSupabaseListener();
     })();
   }, []);
 
