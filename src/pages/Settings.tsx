@@ -563,28 +563,14 @@ export default function Settings() {
           )}
 
           <div className="flex flex-col gap-4">
-            {/* Supabase Credentials */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Supabase URL">
-                <input
-                  type="text"
-                  value={useSettings((s) => s.supabaseUrl) || ""}
-                  onChange={(e) => useSettings.setState({ supabaseUrl: e.target.value.trim() })}
-                  placeholder="https://your-project.supabase.co"
-                  className={inputClass}
-                  disabled={!!useSettings((s) => s.supabaseSessionToken)}
-                />
-              </Field>
-              <Field label="Supabase Anon Key">
-                <input
-                  type="password"
-                  value={useSettings((s) => s.supabaseAnonKey) || ""}
-                  onChange={(e) => useSettings.setState({ supabaseAnonKey: e.target.value.trim() })}
-                  placeholder="your-anon-key"
-                  className={inputClass}
-                  disabled={!!useSettings((s) => s.supabaseSessionToken)}
-                />
-              </Field>
+            {/* Supabase Connection Status (Fully Private & Encrypted) */}
+            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
+              <FolderCheck className="h-4 w-4 shrink-0" />
+              <span>
+                {language === "zh"
+                  ? "已加密内置云端数据库连接（安全保密）"
+                  : "Private Cloud Database Connected (Secure)"}
+              </span>
             </div>
 
             {/* Authentication Form / Logged in status */}

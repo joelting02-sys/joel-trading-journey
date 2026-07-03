@@ -18,6 +18,15 @@ import { useSettings } from "@/store/useSettings";
 import { initializeSupabaseListener } from "@/services/supabaseService";
 
 export default function App() {
+  // 捕捉全局 JS 崩溃错误并进行友好弹窗提示
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      alert(`检测到页面错误：\n${event.message}\n发生在：${event.filename}:${event.lineno}`);
+    };
+    window.addEventListener("error", handleError);
+    return () => window.removeEventListener("error", handleError);
+  }, []);
+
   // 启动时尝试恢复已保存的目录句柄,然后从磁盘 hydrate
   useEffect(() => {
     (async () => {
