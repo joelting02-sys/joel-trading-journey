@@ -10,6 +10,9 @@ export const translations = {
       analytics: "Analytics",
       accounts: "Accounts",
       assistant: "AI Assistant",
+      calendar: "Economic Calendar",
+      preMarket: "Pre-Market",
+      positionCalc: "Position Calc",
       sop: "SOP",
       settings: "Settings",
     },
@@ -21,6 +24,9 @@ export const translations = {
       analytics: "Analytics",
       accounts: "Accounts",
       assistant: "AI Assistant",
+      calendar: "Economic Calendar",
+      preMarket: "Pre-Market Checklist",
+      positionCalc: "Position Calculator",
       sop: "SOP",
       settings: "Settings",
     },
@@ -44,6 +50,11 @@ export const translations = {
       short: "Short",
       noAccount: "No account selected. Please create an account first.",
       noTrades: "No trades yet",
+      noNotes: "No trade notes yet. Click a trade to add SOP & mindset notes.",
+      tradeNotes: "Trade Notes",
+      tagSop: "SOP",
+      tagMindset: "Mindset",
+      account: "Account",
     },
     // Trades page
     tradesPage: {
@@ -97,6 +108,25 @@ export const translations = {
       entryRequired: "Entry price is required",
       selectSymbol: "Select a symbol",
     },
+    // Trade Detail page
+    tradeDetail: {
+      backToTrades: "Back to Trades",
+      save: "Save Notes",
+      saved: "Saved",
+      notFound: "Trade not found",
+      openDate: "Open Date",
+      closeDate: "Close Date",
+      sopNotes: "SOP Notes",
+      sopHint: "Entry/exit logic, setup, rules followed",
+      sopPlaceholder: "What was your trading plan? Did you follow your SOP?",
+      mindsetNotes: "Mindset Notes",
+      mindsetHint: "Emotions, discipline, psychology",
+      mindsetPlaceholder: "How did you feel? Were you patient or impulsive?",
+      generalNotes: "General Notes",
+      screenshots: "Trade Screenshots",
+      screenshotsHint: "Attach your chart annotations or trade screenshots",
+      addScreenshot: "Add Screenshot",
+    },
     // Analytics page
     analyticsPage: {
       totalTrades: "Total Trades",
@@ -108,6 +138,18 @@ export const translations = {
       pnlDistribution: "P&L Distribution",
       symbolPerformance: "Symbol Performance",
       trades: "Trades",
+      netPnl: "Net P&L",
+      expectancy: "Expectancy",
+      maxDrawdown: "Max Drawdown",
+      bestTrade: "Best Trade",
+      worstTrade: "Worst Trade",
+      avgWin: "Avg Win",
+      avgLoss: "Avg Loss",
+      maxWinStreak: "Max Win Streak",
+      maxLossStreak: "Max Loss Streak",
+      totalFee: "Total Fee",
+      directionAnalysis: "Long vs Short",
+      dayOfWeek: "Day of Week",
     },
     // Accounts page
     accountsPage: {
@@ -128,6 +170,32 @@ export const translations = {
       delete: "Delete",
       deleteConfirm: "Delete this account?",
       nameRequired: "Account name is required",
+      propFirm: "Prop Firm Challenge",
+      propFirmToggle: "Prop Firm Challenge (optional)",
+      accountType: "Account Type",
+      accountTypeHint: "Just a label. Prop Firm Challenge is separate below.",
+      typeReal: "Real Account",
+      typeProp: "Prop Firm",
+      typeDemo: "Demo",
+      typeOther: "Other",
+      // 个人账户目标(可选)
+      personalGoals: "Personal Goals",
+      personalGoalsHint: "(optional)",
+      targetBalance: "Target Balance",
+      targetBalancePlaceholder: "e.g. 10000",
+      dailyDrawdownLimit: "Daily Drawdown Limit",
+      dailyDrawdownLimitPlaceholder: "e.g. 200",
+      propFirmActive: "ACTIVE",
+      propFirmPassed: "PASSED",
+      propFirmFailed: "FAILED",
+      startingBalance: "Starting Balance",
+      liquidationPoint: "Liquidation Point",
+      lowestEquityEver: "Lowest Equity Ever",
+      minTradingDays: "Min Trading Days",
+      dailyDrawdownPct: "Daily Drawdown",
+      totalDrawdownPct: "Total Drawdown",
+      profitTarget: "Profit Target",
+      startDate: "Start Date",
     },
     // Settings page
     settingsPage: {
@@ -165,6 +233,14 @@ export const translations = {
       apiKeyPlaceholder: "sk-...",
       modelPlaceholder: "gpt-4o, claude-3-5-sonnet, etc.",
       aiConfigHint: "Supports OpenAI-compatible APIs (NVIDIA, Xiaomi, etc.)",
+      // 多 AI 配置
+      aiConfigEmpty: "No AI configurations yet. Add one to start using the assistant.",
+      aiAddConfig: "Add Configuration",
+      aiConfigName: "Configuration Name",
+      aiSetActive: "Set as Active",
+      aiActive: "Active",
+      aiDeleteConfig: "Delete",
+      aiDeleteConfirm: "Delete this AI configuration?",
     },
     // SOP page
     sopPage: {
@@ -203,6 +279,29 @@ export const translations = {
       saveTrade: "Save as Trade",
       tradeExtracted: "Trade info extracted",
       apiError: "API Error",
+      // SOP 修改提议
+      sopProposalTitle: "SOP Change Proposal",
+      sopActionAdd: "Add",
+      sopActionUpdate: "Update",
+      sopActionRemove: "Remove",
+      sopCategory: "Category",
+      sopReason: "Reason",
+      sopApply: "Apply",
+      sopApplyAll: "Apply All",
+      sopReject: "Reject",
+      sopApplied: "Applied",
+      sopRejected: "Rejected",
+      sopAppliedToast: "SOP rules updated",
+      sopRejectedToast: "Proposal rejected",
+      sopReasonAdd: "New rule will be added",
+      sopReasonUpdate: "Existing rule will be modified",
+      sopReasonRemove: "Existing rule will be deleted",
+      // 提取模板
+      templateLabel: "Template",
+      templateTradelock: "Tradelock",
+      templateMt5: "MT5",
+      templateAuto: "Auto",
+      templateMt5Hint: "Block layout — easy to hallucinate, please verify",
     },
     // Common
     common: {
@@ -217,6 +316,9 @@ export const translations = {
       analytics: "数据分析",
       accounts: "账户管理",
       assistant: "AI 助手",
+      calendar: "经济日历",
+      preMarket: "盘前清单",
+      positionCalc: "仓位计算",
       sop: "SOP",
       settings: "设置",
     },
@@ -227,6 +329,9 @@ export const translations = {
       analytics: "数据分析",
       accounts: "账户管理",
       assistant: "AI 助手",
+      calendar: "经济日历",
+      preMarket: "开盘前清单",
+      positionCalc: "仓位计算器",
       sop: "SOP",
       settings: "设置",
     },
@@ -249,6 +354,11 @@ export const translations = {
       short: "做空",
       noAccount: "未选择账户，请先创建一个账户。",
       noTrades: "暂无交易记录",
+      noNotes: "暂无交易笔记。点击交易记录即可添加 SOP 和心态笔记。",
+      tradeNotes: "交易笔记",
+      tagSop: "SOP",
+      tagMindset: "心态",
+      account: "账户",
     },
     tradesPage: {
       searchPlaceholder: "按品种搜索…",
@@ -300,16 +410,47 @@ export const translations = {
       entryRequired: "请输入开仓价",
       selectSymbol: "选择品种",
     },
+    // 交易详情页
+    tradeDetail: {
+      backToTrades: "返回交易记录",
+      save: "保存笔记",
+      saved: "已保存",
+      notFound: "未找到交易记录",
+      openDate: "开仓日期",
+      closeDate: "平仓日期",
+      sopNotes: "SOP 笔记",
+      sopHint: "进场/出场逻辑、交易计划、规则执行",
+      sopPlaceholder: "你的交易计划是什么？是否遵守了 SOP？",
+      mindsetNotes: "心态笔记",
+      mindsetHint: "情绪、纪律、心理状态",
+      mindsetPlaceholder: "当时感觉如何？是耐心还是冲动？",
+      generalNotes: "常规备注",
+      screenshots: "交易截图",
+      screenshotsHint: "附上你的画线图表或交易截图",
+      addScreenshot: "添加截图",
+    },
     analyticsPage: {
       totalTrades: "总交易数",
       winRate: "胜率",
       profitFactor: "盈亏比",
-      avgWinLoss: "平均盈亏",
+      avgWinLoss: "盈亏比(均)",
       monthlyPnl: "月度盈亏",
       winRateTrend: "胜率趋势",
       pnlDistribution: "盈亏分布",
       symbolPerformance: "品种表现",
       trades: "交易数",
+      netPnl: "净盈亏",
+      expectancy: "期望值",
+      maxDrawdown: "最大回撤",
+      bestTrade: "最佳交易",
+      worstTrade: "最差交易",
+      avgWin: "平均盈利",
+      avgLoss: "平均亏损",
+      maxWinStreak: "最大连胜",
+      maxLossStreak: "最大连亏",
+      totalFee: "总手续费",
+      directionAnalysis: "多空分析",
+      dayOfWeek: "星期表现",
     },
     accountsPage: {
       totalEquity: "总权益",
@@ -329,6 +470,32 @@ export const translations = {
       delete: "删除",
       deleteConfirm: "确认删除此账户？",
       nameRequired: "请输入账户名称",
+      propFirm: "Prop Firm 考试",
+      propFirmToggle: "Prop Firm 考试(可选)",
+      accountType: "账户类型",
+      accountTypeHint: "只是一个标签。Prop Firm 考试信息请在下方单独填写。",
+      typeReal: "真实账户",
+      typeProp: "Prop Firm",
+      typeDemo: "模拟",
+      typeOther: "其他",
+      // 个人账户目标(可选)
+      personalGoals: "个人目标",
+      personalGoalsHint: "(可选)",
+      targetBalance: "目标资金",
+      targetBalancePlaceholder: "如 10000",
+      dailyDrawdownLimit: "日内回撤上限",
+      dailyDrawdownLimitPlaceholder: "如 200",
+      propFirmActive: "进行中",
+      propFirmPassed: "已通过",
+      propFirmFailed: "已失败",
+      startingBalance: "起始余额",
+      liquidationPoint: "清算点",
+      lowestEquityEver: "历史最低权益",
+      minTradingDays: "最少交易天数",
+      dailyDrawdownPct: "每日回撤",
+      totalDrawdownPct: "总回撤",
+      profitTarget: "利润目标",
+      startDate: "开始日期",
     },
     settingsPage: {
       preferences: "偏好设置",
@@ -365,6 +532,14 @@ export const translations = {
       apiKeyPlaceholder: "sk-...",
       modelPlaceholder: "gpt-4o, claude-3-5-sonnet 等",
       aiConfigHint: "支持 OpenAI 兼容 API（NVIDIA、小米等）",
+      // 多 AI 配置
+      aiConfigEmpty: "还没有 AI 配置,添加一个即可使用助手",
+      aiAddConfig: "添加配置",
+      aiConfigName: "配置名称",
+      aiSetActive: "设为当前",
+      aiActive: "使用中",
+      aiDeleteConfig: "删除",
+      aiDeleteConfirm: "确定删除此 AI 配置？",
     },
     sopPage: {
       title: "SOP",
@@ -393,7 +568,7 @@ export const translations = {
       send: "发送",
       clear: "清空对话",
       welcome: "AI 交易助手",
-      welcomeDesc: "上传交易截图自动提取记录，询问市场分析，或检查 SOP 合规性。",
+      welcomeDesc: "上传交易截图自动提取记录,询问市场分析,或检查 SOP 合规性。",
       notConfigured: "AI API 未配置",
       notConfiguredDesc: "请在设置中配置 AI API 后开始使用助手。",
       goToSettings: "前往设置",
@@ -401,6 +576,29 @@ export const translations = {
       saveTrade: "保存为交易",
       tradeExtracted: "交易信息已提取",
       apiError: "API 错误",
+      // SOP 修改提议
+      sopProposalTitle: "SOP 修改建议",
+      sopActionAdd: "新增",
+      sopActionUpdate: "修改",
+      sopActionRemove: "删除",
+      sopCategory: "分类",
+      sopReason: "理由",
+      sopApply: "应用",
+      sopApplyAll: "全部应用",
+      sopReject: "拒绝",
+      sopApplied: "已应用",
+      sopRejected: "已拒绝",
+      sopAppliedToast: "SOP 规则已更新",
+      sopRejectedToast: "已拒绝该建议",
+      sopReasonAdd: "将新增一条规则",
+      sopReasonUpdate: "将修改现有规则",
+      sopReasonRemove: "将删除现有规则",
+      // 提取模板
+      templateLabel: "模板",
+      templateTradelock: "Tradelock",
+      templateMt5: "MT5",
+      templateAuto: "自动识别",
+      templateMt5Hint: "块状布局·易出幻觉,请仔细核对",
     },
     common: {
       selectSymbol: "选择品种",
@@ -408,4 +606,41 @@ export const translations = {
   },
 } as const;
 
-export type TranslationKeys = typeof translations.en;
+export type TranslationKeys = {
+  nav: {
+    dashboard: string;
+    trades: string;
+    newTrade: string;
+    analytics: string;
+    accounts: string;
+    assistant: string;
+    calendar: string;
+    preMarket: string;
+    positionCalc: string;
+    sop: string;
+    settings: string;
+  };
+  title: {
+    dashboard: string;
+    trades: string;
+    newTrade: string;
+    analytics: string;
+    accounts: string;
+    assistant: string;
+    calendar: string;
+    preMarket: string;
+    positionCalc: string;
+    sop: string;
+    settings: string;
+  };
+  dashboard: { [k: string]: string };
+  tradesPage: { [k: string]: string };
+  newTradePage: { [k: string]: string };
+  tradeDetail: { [k: string]: string };
+  analyticsPage: { [k: string]: string };
+  accountsPage: { [k: string]: string };
+  settingsPage: { [k: string]: string };
+  sopPage: { [k: string]: string };
+  assistantPage: { [k: string]: string };
+  common: { selectSymbol: string };
+};

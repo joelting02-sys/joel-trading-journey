@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "primary" | "loss" | "neutral" | "warning";
+type BadgeVariant = "primary" | "loss" | "neutral" | "warning" | "info";
 
 interface BadgeProps {
   variant?: BadgeVariant;
@@ -13,6 +13,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   loss: "bg-loss/12 text-loss",
   neutral: "bg-bg-hover text-text-secondary",
   warning: "bg-warning/12 text-warning",
+  info: "bg-info/12 text-info",
 };
 
 export default function Badge({

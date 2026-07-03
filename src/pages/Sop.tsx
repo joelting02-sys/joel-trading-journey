@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain, GripVertical } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
 import type { SopRule, SopCategory } from "@/types";
@@ -16,6 +16,7 @@ interface CategoryMeta {
 export default function Sop() {
   const t = useSettings((s) => s.t());
   const sopRules = useSettings((s) => s.sopRules);
+  const setSopRules = useSettings((s) => s.setSopRules);
   const addSopRule = useSettings((s) => s.addSopRule);
   const updateSopRule = useSettings((s) => s.updateSopRule);
   const deleteSopRule = useSettings((s) => s.deleteSopRule);
@@ -48,6 +49,24 @@ export default function Sop() {
     setEditingRule(null);
   };
 
+  // 拖拽重排:仅替换当前 category 内的顺序,其他 category 规则原位保留
+  const handleReorder = (category: SopCategory, reordered: SopRule[]) => {
+    const newRules: SopRule[] = [];
+    let inserted = false;
+    for (const r of sopRules) {
+      if (r.category === category) {
+        if (!inserted) {
+          newRules.push(...reordered);
+          inserted = true;
+        }
+      } else {
+        newRules.push(r);
+      }
+    }
+    if (!inserted) newRules.push(...reordered);
+    setSopRules(newRules);
+  };
+
   return (
     <Layout title={t.title.sop}>
       {/* Header */}
@@ -75,6 +94,7 @@ export default function Sop() {
             rules={rulesByCategory[cat.key]}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onReorder={(reordered) => handleReorder(cat.key, reordered)}
           />
         ))}
       </div>
@@ -95,11 +115,33 @@ interface CategorySectionProps {
   rules: SopRule[];
   onEdit: (rule: SopRule) => void;
   onDelete: (rule: SopRule) => void;
+  onReorder: (reordered: SopRule[]) => void;
 }
 
-function CategorySection({ category, rules, onEdit, onDelete }: CategorySectionProps) {
+function CategorySection({ category, rules, onEdit, onDelete, onReorder }: CategorySectionProps) {
   const t = useSettings((s) => s.t());
+  const language = useSettings((s) => s.language);
   const { Icon, label, iconBg, iconColor, badge } = category;
+  // 拖拽状态:正在拖拽的规则 id、被悬停的规则 id
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  const handleDragStart = (id: string) => setDragId(id);
+  const handleDragEnter = (id: string) => {
+    if (id === dragId) return;
+    setOverId(id);
+    const from = rules.findIndex((r) => r.id === dragId);
+    const to = rules.findIndex((r) => r.id === id);
+    if (from < 0 || to < 0) return;
+    const next = [...rules];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onReorder(next);
+  };
+  const handleDragEnd = () => {
+    setDragId(null);
+    setOverId(null);
+  };
 
   return (
     <section>
@@ -111,6 +153,11 @@ function CategorySection({ category, rules, onEdit, onDelete }: CategorySectionP
         <span className={`tj-number inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-semibold ${badge}`}>
           {rules.length}
         </span>
+        {rules.length > 1 && (
+          <span className="text-[11px] text-text-muted">
+            {language === "zh" ? "拖动 ⋮⋮ 调整顺序" : "Drag ⋮⋮ to reorder"}
+          </span>
+        )}
       </div>
 
       {rules.length === 0 ? (
@@ -120,7 +167,17 @@ function CategorySection({ category, rules, onEdit, onDelete }: CategorySectionP
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {rules.map((rule) => (
-            <RuleCard key={rule.id} rule={rule} onEdit={() => onEdit(rule)} onDelete={() => onDelete(rule)} />
+            <RuleCard
+              key={rule.id}
+              rule={rule}
+              isDragging={dragId === rule.id}
+              isOver={overId === rule.id && dragId !== rule.id}
+              onEdit={() => onEdit(rule)}
+              onDelete={() => onDelete(rule)}
+              onDragStart={handleDragStart}
+              onDragEnter={handleDragEnter}
+              onDragEnd={handleDragEnd}
+            />
           ))}
         </div>
       )}
@@ -130,38 +187,72 @@ function CategorySection({ category, rules, onEdit, onDelete }: CategorySectionP
 
 interface RuleCardProps {
   rule: SopRule;
+  isDragging: boolean;
+  isOver: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onDragStart: (id: string) => void;
+  onDragEnter: (id: string) => void;
+  onDragEnd: () => void;
 }
 
-function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
+function RuleCard({
+  rule, isDragging, isOver,
+  onEdit, onDelete,
+  onDragStart, onDragEnter, onDragEnd,
+}: RuleCardProps) {
   const t = useSettings((s) => s.t());
   return (
-    <div className="group rounded-md border border-border bg-bg-surface px-4 py-3 transition-colors hover:bg-bg-hover">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display text-sm font-semibold text-text">{rule.title}</h3>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-bg-elevated hover:text-text"
-            title={t.sopPage.editRule}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
-            title={t.sopPage.delete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart(rule.id);
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        onDragEnter(rule.id);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragEnd={onDragEnd}
+      onDrop={(e) => e.preventDefault()}
+      className={`group flex items-start gap-2 rounded-md border bg-bg-surface px-4 py-3 transition-all ${
+        isDragging ? "opacity-40 border-primary" : isOver ? "border-primary ring-1 ring-primary/30" : "border-border hover:bg-bg-hover"
+      }`}
+    >
+      {/* 拖拽 handle:鼠标悬停时显示,光标变 grab */}
+      <div
+        className="mt-0.5 cursor-grab text-text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        title="拖动排序"
+      >
+        <GripVertical className="h-4 w-4" />
       </div>
-      {rule.description && (
-        <p className="mt-1.5 text-xs leading-relaxed text-text-secondary">{rule.description}</p>
-      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-display text-sm font-semibold text-text">{rule.title}</h3>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="rounded p-1 text-text-muted transition-colors hover:bg-bg-elevated hover:text-text"
+              title={t.sopPage.editRule}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded p-1 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
+              title={t.sopPage.delete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        {rule.description && (
+          <p className="mt-1.5 text-xs leading-relaxed text-text-secondary">{rule.description}</p>
+        )}
+      </div>
     </div>
   );
 }

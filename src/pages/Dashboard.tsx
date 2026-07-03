@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Line } from "react-chartjs-2";
+import { Target, AlertTriangle } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,7 +15,7 @@ import Layout from "@/components/Layout";
 import KpiCard from "@/components/KpiCard";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, type CurrencyCode } from "@/store/useSettings";
 import { formatPercent, formatDate } from "@/utils/format";
 import {
   formatCurrencyConverted,
@@ -40,9 +41,10 @@ export default function Dashboard() {
   const allTrades = useTradeStore((s) => s.trades);
   const accounts = useTradeStore((s) => s.accounts);
   const activeAccountId = useTradeStore((s) => s.activeAccountId);
-  const journalEntries = useTradeStore((s) => s.journalEntries);
+  const setActiveAccount = useTradeStore((s) => s.setActiveAccount);
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
+  const language = useSettings((s) => s.language);
 
   const activeAccount = useMemo(
     () => accounts.find((a) => a.id === activeAccountId) ?? accounts[0],
@@ -79,9 +81,16 @@ export default function Dashboard() {
     [accountTrades]
   );
 
-  const recentJournals = useMemo(
-    () => journalEntries.slice(0, 3),
-    [journalEntries]
+  // 有笔记的交易,按平仓日期倒序,取最近 6 条
+  const notedTrades = useMemo(
+    () =>
+      accountTrades
+        .filter(
+          (tr) => tr.sopNotes || tr.mindsetNotes || tr.notes
+        )
+        .sort((a, b) => new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime())
+        .slice(0, 6),
+    [accountTrades]
   );
 
   const chartData = useMemo(() => {
@@ -112,8 +121,17 @@ export default function Dashboard() {
     };
   }, [equityCurve]);
 
-  const chartOptions = useMemo(
-    () => ({
+  const chartOptions = useMemo(() => {
+    // 计算 y 轴的最小/最大值范围,避免数值相近时所有刻度都四舍五入到同一个值
+    const values = equityCurve.map((p) => p.value).filter((v) => Number.isFinite(v));
+    const minVal = values.length ? Math.min(...values) : 0;
+    const maxVal = values.length ? Math.max(...values) : 1;
+    const range = maxVal - minVal || Math.abs(maxVal) || 1;
+    const padding = range * 0.1;
+    const suggestedMin = Math.max(0, minVal - padding);
+    const suggestedMax = maxVal + padding;
+
+    return {
       responsive: true,
       maintainAspectRatio: false,
       interaction: {
@@ -126,8 +144,8 @@ export default function Dashboard() {
           backgroundColor: "#212529",
           borderColor: "#e9ecef",
           borderWidth: 1,
-          titleColor: "#868e96",
-          bodyColor: "#212529",
+          titleColor: "#f1f3f5",
+          bodyColor: "#f1f3f5",
           bodyFont: {
             family: "'JetBrains Mono', monospace",
             size: 12,
@@ -138,10 +156,12 @@ export default function Dashboard() {
           cornerRadius: 6,
           displayColors: false,
           callbacks: {
+            title: (items: { label: string }[]) => items?.[0]?.label ?? "",
             label: (context: { parsed: { y: number } }) =>
-              "$" +
+              "余额: $" +
               context.parsed.y.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
               }),
           },
         },
@@ -158,23 +178,23 @@ export default function Dashboard() {
         },
         y: {
           grid: { color: "#f1f3f5", drawBorder: false },
+          suggestedMin,
+          suggestedMax,
           ticks: {
             color: "#ced4da",
             font: { family: "'JetBrains Mono', monospace", size: 11 },
-            callback: (value: number) => "$" + (value / 1000).toFixed(0) + "k",
+            callback: (value: number) => {
+              const abs = Math.abs(value);
+              if (abs >= 1_000_000) return "$" + (value / 1_000_000).toFixed(1) + "M";
+              if (abs >= 1_000) return "$" + (value / 1_000).toFixed(1) + "k";
+              return "$" + value.toFixed(0);
+            },
           },
           border: { display: false },
         },
       },
-    }),
-    []
-  );
-
-  const ratingColor: Record<string, string> = {
-    A: "text-primary",
-    B: "text-warning",
-    C: "text-loss",
-  };
+    };
+  }, [equityCurve]);
 
   // 无账户时的空状态
   if (!activeAccount || !kpi || !quickStats) {
@@ -192,6 +212,31 @@ export default function Dashboard() {
 
   return (
     <Layout title={t.title.dashboard}>
+      {/* Account Switcher */}
+      {accounts.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-sm border border-border bg-bg-elevated px-3 py-2">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
+            {t.dashboard.account || "Account"}
+          </span>
+          <div className="relative flex-1 sm:max-w-xs">
+            <select
+              value={activeAccount?.id ?? ""}
+              onChange={(e) => setActiveAccount(e.target.value)}
+              className="w-full appearance-none rounded-sm border border-border bg-bg-primary px-3 py-1.5 pr-8 font-mono text-[13px] text-text outline-none transition-colors hover:border-primary focus:border-primary"
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted">
+              ▾
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* KPI Metrics Row */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
@@ -255,6 +300,32 @@ export default function Dashboard() {
         </span>
       </div>
 
+      {/* 个人账户目标进度(有 targetBalance 或 dailyDrawdownLimit 时显示) */}
+      {activeAccount.accountType !== "prop" && (activeAccount.targetBalance || activeAccount.dailyDrawdownLimit) && (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Target Balance 进度 */}
+          {activeAccount.targetBalance ? (
+            <TargetProgressCard
+              label={language === "zh" ? "目标资金" : "Target Balance"}
+              current={kpi.totalEquity}
+              target={activeAccount.targetBalance}
+              currency={currency}
+              language={language}
+            />
+          ) : null}
+          {/* 日内回撤警告 */}
+          {activeAccount.dailyDrawdownLimit ? (
+            <DailyDrawdownCard
+              label={language === "zh" ? "日内回撤上限" : "Daily Drawdown Limit"}
+              todayPnl={kpi.todayPnl}
+              limit={activeAccount.dailyDrawdownLimit}
+              currency={currency}
+              language={language}
+            />
+          ) : null}
+        </div>
+      )}
+
       {/* Equity Curve + Recent Trades */}
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr]">
         {/* Equity Curve */}
@@ -314,11 +385,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Daily Journal */}
+      {/* Trade Notes */}
       <div className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <span className="font-display text-sm font-semibold tracking-tight text-text">
-            {t.dashboard.dailyJournal}
+            {t.dashboard.tradeNotes}
           </span>
           <Link
             to="/trades"
@@ -327,36 +398,176 @@ export default function Dashboard() {
             {t.dashboard.viewAllTrades}
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {recentJournals.map((entry) => (
-            <div
-              key={entry.id}
-              className="rounded-md border border-border bg-bg-surface px-4 py-3.5"
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="tj-number whitespace-nowrap text-xs text-text-secondary">
-                  {formatDate(entry.date)}
-                </span>
-                <span
-                  className={`text-sm font-semibold leading-none ${ratingColor[entry.rating]}`}
+        {notedTrades.length === 0 ? (
+          <div className="rounded-md border border-border bg-bg-surface px-4 py-8 text-center text-sm text-text-muted">
+            {t.dashboard.noNotes}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {notedTrades.map((trade) => {
+              const note = trade.sopNotes || trade.mindsetNotes || trade.notes || "";
+              const isSop = !!trade.sopNotes;
+              const isMindset = !!trade.mindsetNotes;
+              return (
+                <Link
+                  key={trade.id}
+                  to={`/trades/${trade.id}`}
+                  className="block rounded-md border border-border bg-bg-surface px-4 py-3.5 transition-colors hover:border-primary"
                 >
-                  {entry.rating}
-                </span>
-              </div>
-              <p
-                className="m-0 overflow-hidden font-body text-[13px] leading-normal text-text"
-                style={{
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                }}
-              >
-                {entry.content}
-              </p>
-            </div>
-          ))}
-        </div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <span className="tj-number whitespace-nowrap text-xs font-semibold text-text">
+                        {trade.symbol}
+                      </span>
+                      <Badge variant={trade.direction === "long" ? "primary" : "loss"}>
+                        {trade.direction === "long" ? t.dashboard.long : t.dashboard.short}
+                      </Badge>
+                    </span>
+                    <span
+                      className={`tj-number whitespace-nowrap text-xs font-medium ${
+                        trade.pnl >= 0 ? "text-primary" : "text-loss"
+                      }`}
+                    >
+                      {formatSignedCurrencyConverted(trade.pnl, currency)}
+                    </span>
+                  </div>
+                  <div className="mb-1.5 flex gap-1.5">
+                    {isSop && (
+                      <span className="rounded bg-primary-ghost px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        {t.dashboard.tagSop}
+                      </span>
+                    )}
+                    {isMindset && (
+                      <span className="rounded bg-warning-ghost px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        {t.dashboard.tagMindset}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="m-0 overflow-hidden font-body text-[13px] leading-normal text-text-secondary"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
+                    {note}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Layout>
+  );
+}
+
+// 目标资金进度卡片
+function TargetProgressCard({
+  label, current, target, currency, language,
+}: {
+  label: string;
+  current: number;
+  target: number;
+  currency: CurrencyCode;
+  language: "zh" | "en";
+}) {
+  const percent = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+  const remaining = target - current;
+  const isReached = current >= target;
+  return (
+    <div className="rounded-md border border-border bg-bg-surface px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+          <Target className="h-3.5 w-3.5 text-primary" />
+          {label}
+        </span>
+        <span className={`tj-number text-sm font-semibold ${isReached ? "text-primary" : "text-text"}`}>
+          {formatCurrencyConverted(current, currency)} / {formatCurrencyConverted(target, currency)}
+        </span>
+      </div>
+      {/* 进度条 */}
+      <div className="relative h-2 overflow-hidden rounded-full bg-bg-elevated">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+            isReached ? "bg-primary" : "bg-primary/60"
+          }`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[11px]">
+        <span className="text-text-muted">
+          {percent.toFixed(1)}%
+        </span>
+        <span className={isReached ? "text-primary font-medium" : "text-text-muted"}>
+          {isReached
+            ? (language === "zh" ? "已达成目标" : "Target reached")
+            : (language === "zh"
+              ? `还差 ${formatCurrencyConverted(remaining, currency)}`
+              : `${formatCurrencyConverted(remaining, currency)} to go`)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// 日内回撤警告卡片
+function DailyDrawdownCard({
+  label, todayPnl, limit, currency, language,
+}: {
+  label: string;
+  todayPnl: number;
+  limit: number;
+  currency: CurrencyCode;
+  language: "zh" | "en";
+}) {
+  // todayPnl < 0 时是亏损,回撤 = |todayPnl|
+  const drawdown = todayPnl < 0 ? Math.abs(todayPnl) : 0;
+  const percent = limit > 0 ? Math.min((drawdown / limit) * 100, 100) : 0;
+  const isWarning = drawdown > 0 && drawdown >= limit * 0.8;
+  const isBreached = drawdown >= limit;
+  const remaining = limit - drawdown;
+  return (
+    <div className={`rounded-md border px-4 py-3 ${
+      isBreached
+        ? "border-loss/40 bg-loss/5"
+        : isWarning
+          ? "border-warning/40 bg-warning/5"
+          : "border-border bg-bg-surface"
+    }`}>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+          <AlertTriangle className={`h-3.5 w-3.5 ${isBreached ? "text-loss" : isWarning ? "text-warning" : "text-text-muted"}`} />
+          {label}
+        </span>
+        <span className={`tj-number text-sm font-semibold ${
+          isBreached ? "text-loss" : isWarning ? "text-warning" : "text-text"
+        }`}>
+          {language === "zh" ? "今日" : "Today"}: {formatSignedCurrencyConverted(todayPnl, currency)}
+        </span>
+      </div>
+      {/* 回撤进度条(反向:亏损越多越满) */}
+      <div className="relative h-2 overflow-hidden rounded-full bg-bg-elevated">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+            isBreached ? "bg-loss" : isWarning ? "bg-warning" : "bg-primary/40"
+          }`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[11px]">
+        <span className={isBreached ? "text-loss font-medium" : isWarning ? "text-warning font-medium" : "text-text-muted"}>
+          {isBreached
+            ? (language === "zh" ? "已超过日内回撤上限!" : "Daily limit breached!")
+            : isWarning
+              ? (language === "zh" ? `警告:仅剩 ${formatCurrencyConverted(remaining, currency)}` : `Warning: ${formatCurrencyConverted(remaining, currency)} left`)
+              : (language === "zh" ? `上限 ${formatCurrencyConverted(limit, currency)}` : `Limit ${formatCurrencyConverted(limit, currency)}`)}
+        </span>
+        <span className="text-text-muted">
+          {percent.toFixed(1)}%
+        </span>
+      </div>
+    </div>
   );
 }

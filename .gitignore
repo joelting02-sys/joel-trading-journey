@@ -1,24 +1,56 @@
-# Logs
-logs
+﻿# ===== 依赖 =====
+node_modules/
+.pnpm-store/
+
+# ===== 构建输出 =====
+dist/
+dist-ssr/
+build/
+.vite/
+
+# ===== 环境变量 / 密钥 =====
+.env
+.env.*
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== 编辑器 / IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# ===== 日志 / 缓存 / 临时 =====
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
+.cache/
+.temp/
+tmp/
 
-node_modules
-dist
-dist-ssr
-*.local
+# ===== TypeScript 增量编译 =====
+*.tsbuildinfo
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# ===== Trae / 工具临时文件 =====
+.trae/
+
+# ===== 测试覆盖率 =====
+coverage/
+.nyc_output/
+
+# ===== 个人本地数据（绝对不传） =====
+本地储存/
+test_*.js
+test_*.ts

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowUpDown, Plus, Search, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowUpDown, Plus, Search, Trash2, FileText, Image as ImageIcon } from "lucide-react";
 import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
@@ -23,6 +23,7 @@ export default function Trades() {
   const accounts = useTradeStore((s) => s.accounts);
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
+  const navigate = useNavigate();
 
   // 账户选择：all = 所有账户，或指定某个账户
   const [accountFilter, setAccountFilter] = useState<string>("all");
@@ -162,6 +163,7 @@ export default function Trades() {
                   key={trade.id}
                   trade={trade}
                   onDelete={deleteTrade}
+                  onClick={() => navigate(`/trades/${trade.id}`)}
                   accountName={accounts.find((a) => a.id === trade.account)?.name ?? ""}
                 />
               ))}
@@ -228,10 +230,11 @@ function SortHeader({
 interface TradeRowProps {
   trade: Trade;
   onDelete: (id: string) => void;
+  onClick: () => void;
   accountName: string;
 }
 
-function TradeRow({ trade, onDelete, accountName }: TradeRowProps) {
+function TradeRow({ trade, onDelete, onClick, accountName }: TradeRowProps) {
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
   const isWin = trade.pnl >= 0;
@@ -241,11 +244,24 @@ function TradeRow({ trade, onDelete, accountName }: TradeRowProps) {
   const netPnl = trade.pnl + fee;
   const netColor = netPnl >= 0 ? "text-primary" : "text-loss";
   const feeColor = fee < 0 ? "text-loss" : "text-text-muted";
+  const hasNotes = !!(trade.sopNotes || trade.mindsetNotes || trade.notes);
+  const hasImages = !!(trade.images && trade.images.length > 0);
 
   return (
-    <tr className="border-b border-border-subtle transition-colors last:border-0 hover:bg-bg-hover">
+    <tr
+      onClick={onClick}
+      className="cursor-pointer border-b border-border-subtle transition-colors last:border-0 hover:bg-bg-hover"
+    >
       <td className="px-3 py-2.5 font-mono font-medium text-text">
-        {trade.symbol}
+        <div className="flex items-center gap-1.5">
+          {trade.symbol}
+          {hasNotes && (
+            <FileText className="h-3 w-3 text-text-muted" strokeWidth={1.5} />
+          )}
+          {hasImages && (
+            <ImageIcon className="h-3 w-3 text-primary/70" strokeWidth={1.5} />
+          )}
+        </div>
       </td>
       <td className="px-3 py-2.5">
         <Badge variant={trade.direction === "long" ? "primary" : "loss"}>
@@ -285,7 +301,10 @@ function TradeRow({ trade, onDelete, accountName }: TradeRowProps) {
       <td className="px-3 py-2.5 text-right">
         <button
           type="button"
-          onClick={() => onDelete(trade.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(trade.id);
+          }}
           aria-label="Delete trade"
           className="inline-flex items-center justify-center rounded-sm p-1.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-loss"
         >

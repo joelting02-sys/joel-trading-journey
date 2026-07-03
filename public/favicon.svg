@@ -1,4 +1,18 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="32" height="32" fill="#0A0B0D"/>
-<path d="M26.6677 23.7149H8.38057V20.6496H5.33301V8.38159H26.6677V23.7149ZM8.38057 20.6496H23.6201V11.4482H8.38057V20.6496ZM16.0011 16.0021L13.8461 18.1705L11.6913 16.0021L13.8461 13.8337L16.0011 16.0021ZM22.0963 16.0008L19.9414 18.1691L17.7865 16.0008L19.9414 13.8324L22.0963 16.0008Z" fill="#32F08C"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" fill="#000000"/>
+  <text x="16" y="20"
+        text-anchor="middle"
+        font-family="'Didot', 'Bodoni 72', 'Playfair Display', 'Times New Roman', Georgia, serif"
+        font-size="14"
+        font-weight="400"
+        letter-spacing="0.5"
+        fill="#C9B68F">JOEL</text>
+  <line x1="6" y1="25" x2="11" y2="25" stroke="#C9B68F" stroke-width="0.4"/>
+  <text x="16" y="27"
+        text-anchor="middle"
+        font-family="'Didot', 'Bodoni 72', 'Playfair Display', 'Times New Roman', Georgia, serif"
+        font-size="4"
+        letter-spacing="0.6"
+        fill="#C9B68F">2026</text>
+  <line x1="21" y1="25" x2="26" y2="25" stroke="#C9B68F" stroke-width="0.4"/>
 </svg>

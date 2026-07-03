@@ -1,14 +1,39 @@
-import { useState, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Trash2, Database, Palette, Info, Bot } from "lucide-react";
+import { useState, useEffect, type ReactNode } from "react";
+import { Settings as SettingsIcon, Download, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
+import type { AiConfigEntry, CalendarCountryCode, CalendarInstrumentCode, CalendarImportanceFilter } from "@/types";
 import type { Language } from "@/i18n/translations";
+import {
+  isFileSystemSupported,
+  pickDataDirectory,
+  getLocation,
+  requestDirectoryPermission,
+  unbindDirectory,
+  saveTradesToDisk,
+  saveAccountsToDisk,
+  saveSettingsToDisk,
+  saveSopToDisk,
+  getDirName,
+  listDataFiles,
+  readDataFileText,
+  type DataLocation,
+} from "@/services/dataStorage";
 
 export default function Settings() {
   const accounts = useTradeStore((s) => s.accounts);
   const t = useSettings((s) => s.t());
-  const { currency, setCurrency, language, setLanguage, aiConfig, setAiConfig } = useSettings();
+  const language = useSettings((s) => s.language);
+  const { currency, setCurrency, setLanguage } = useSettings();
+  const aiConfigs = useSettings((s) => s.aiConfigs);
+  const activeAiConfigId = useSettings((s) => s.activeAiConfigId);
+  const addAiConfigEntry = useSettings((s) => s.addAiConfigEntry);
+  const updateAiConfigEntry = useSettings((s) => s.updateAiConfigEntry);
+  const removeAiConfigEntry = useSettings((s) => s.removeAiConfigEntry);
+  const setActiveAiConfigId = useSettings((s) => s.setActiveAiConfigId);
+  const calendarPrefs = useSettings((s) => s.calendarPrefs);
+  const setCalendarPrefs = useSettings((s) => s.setCalendarPrefs);
 
   const [defaultAccount, setDefaultAccount] = useState(accounts[0]?.id ?? "");
   const [dateFormat, setDateFormat] = useState("MMM DD, YYYY");
@@ -16,8 +41,154 @@ export default function Settings() {
   const [compactMode, setCompactMode] = useState(false);
   const [showPnlInPips, setShowPnlInPips] = useState(false);
 
+  // 本地数据目录相关状态
+  const [dataLocation, setDataLocation] = useState<DataLocation>(getLocation());
+  const [migrating, setMigrating] = useState(false);
+  const [migrated, setMigrated] = useState(false);
+  const [locationError, setLocationError] = useState("");
+
+  // 文件夹浏览弹窗
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [fileList, setFileList] = useState<Array<{ name: string; size: number; lastModified: number }>>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [loadingFile, setLoadingFile] = useState(false);
+
+  // 检查是否需要迁移提示(有 localStorage 旧数据但未选目录)
+  useEffect(() => {
+    if (dataLocation !== "none") return;
+    const hasOldData =
+      localStorage.getItem("tj-trade-store") || localStorage.getItem("tj-settings-store");
+    if (hasOldData) {
+      // 只在组件挂载时提示一次
+      setTimeout(() => {
+        const ok = window.confirm(
+          language === "zh"
+            ? "检测到旧数据(存在浏览器缓存中)。是否立即选择文件夹,把所有数据迁移到本地 JSON 文件?(强烈建议)"
+            : "Detected old data in browser cache. Choose a folder to migrate all data to local JSON files now? (Strongly recommended)"
+        );
+        if (ok) handlePickFolder();
+      }, 500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handlePickFolder() {
+    setLocationError("");
+    try {
+      await pickDataDirectory();
+      setDataLocation("filesystem");
+      // 立即触发一次全量写入,把现有数据落地
+      await migrateToDisk();
+    } catch (e) {
+      setLocationError((e as Error).message || "Failed to pick folder");
+    }
+  }
+
+  async function handleReauth() {
+    setLocationError("");
+    try {
+      const ok = await requestDirectoryPermission();
+      if (ok) {
+        setDataLocation("filesystem");
+        await migrateToDisk();
+      } else {
+        setLocationError(language === "zh" ? "权限被拒绝" : "Permission denied");
+      }
+    } catch (e) {
+      setLocationError((e as Error).message || "Failed");
+    }
+  }
+
+  async function handleUnbind() {
+    if (!window.confirm(language === "zh"
+      ? "确定解除绑定?解除后将只使用浏览器缓存(数据有丢失风险)。"
+      : "Unbind? Will only use browser cache after this (data loss risk)."
+    )) return;
+    await unbindDirectory();
+    setDataLocation("none");
+  }
+
+  // 把当前 store 数据全量写一次到磁盘
+  async function migrateToDisk() {
+    setMigrating(true);
+    setMigrated(false);
+    try {
+      const ts = useTradeStore.getState();
+      const ss = useSettings.getState();
+      await Promise.all([
+        saveTradesToDisk(ts.trades),
+        saveAccountsToDisk(ts.accounts),
+        saveSopToDisk(ss.sopRules),
+        saveSettingsToDisk({
+          language: ss.language,
+          currency: ss.currency,
+          aiConfigs: ss.aiConfigs,
+          activeAiConfigId: ss.activeAiConfigId,
+          calendarPrefs: ss.calendarPrefs,
+          calendarContent: ss.calendarContent,
+          calendarUpdatedAt: ss.calendarUpdatedAt,
+        }),
+      ]);
+      setMigrated(true);
+      setTimeout(() => setMigrated(false), 3000);
+    } catch (e) {
+      setLocationError((e as Error).message || "Migration failed");
+    } finally {
+      setMigrating(false);
+    }
+  }
+
+  // 打开文件夹浏览器弹窗
+  async function handleOpenFolder() {
+    setShowFileBrowser(true);
+    setSelectedFile(null);
+    setFileContent("");
+    try {
+      const files = await listDataFiles();
+      setFileList(files);
+    } catch (e) {
+      setFileList([]);
+    }
+  }
+
+  // 查看单个文件内容
+  async function handleViewFile(name: string) {
+    setSelectedFile(name);
+    setLoadingFile(true);
+    setFileContent("");
+    try {
+      const text = await readDataFileText(name);
+      setFileContent(text);
+    } catch (e) {
+      setFileContent(language === "zh" ? "读取失败" : "Read failed");
+    } finally {
+      setLoadingFile(false);
+    }
+  }
+
+  // 下载单个文件
+  function handleDownloadFile(name: string, content: string) {
+    const blob = new Blob([content], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function handleAddConfig() {
+    addAiConfigEntry({
+      name: language === "zh" ? `配置 ${aiConfigs.length + 1}` : `Config ${aiConfigs.length + 1}`,
+      endpoint: "",
+      apiKey: "",
+      model: "",
+    });
+  }
+
   const selectClass =
     "w-full rounded-md border border-border bg-bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary";
+  const inputClass = selectClass;
 
   return (
     <Layout title={t.title.settings}>
@@ -65,35 +236,60 @@ export default function Settings() {
           title={t.settingsPage.aiConfig}
           description={t.settingsPage.aiConfigDesc}
         >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t.settingsPage.apiEndpoint}>
-              <input
-                type="text"
-                value={aiConfig.endpoint}
-                onChange={(e) => setAiConfig({ endpoint: e.target.value })}
-                placeholder={t.settingsPage.apiEndpointPlaceholder}
-                className={selectClass}
-              />
-            </Field>
-            <Field label={t.settingsPage.apiKey}>
-              <input
-                type="password"
-                value={aiConfig.apiKey}
-                onChange={(e) => setAiConfig({ apiKey: e.target.value })}
-                placeholder={t.settingsPage.apiKeyPlaceholder}
-                className={selectClass}
-              />
-            </Field>
-            <Field label={t.settingsPage.modelName}>
-              <input
-                type="text"
-                value={aiConfig.model}
-                onChange={(e) => setAiConfig({ model: e.target.value })}
-                placeholder={t.settingsPage.modelPlaceholder}
-                className={selectClass}
-              />
-            </Field>
-          </div>
+          {aiConfigs.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-bg-elevated/40 px-4 py-8 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Bot className="h-5 w-5 text-primary" />
+              </div>
+              <p className="text-sm text-text-secondary">
+                {t.settingsPage.aiConfigEmpty}
+              </p>
+              <button
+                type="button"
+                onClick={handleAddConfig}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                {t.settingsPage.aiAddConfig}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {aiConfigs.map((cfg) => (
+                <AiConfigCard
+                  key={cfg.id}
+                  config={cfg}
+                  isActive={cfg.id === activeAiConfigId}
+                  onSetActive={() => setActiveAiConfigId(cfg.id)}
+                  onUpdate={(patch) => updateAiConfigEntry(cfg.id, patch)}
+                  onRemove={() => removeAiConfigEntry(cfg.id)}
+                  inputClass={inputClass}
+                  language={language}
+                  labels={{
+                    setActive: t.settingsPage.aiSetActive,
+                    active: t.settingsPage.aiActive,
+                    configName: t.settingsPage.aiConfigName,
+                    apiEndpoint: t.settingsPage.apiEndpoint,
+                    apiKey: t.settingsPage.apiKey,
+                    modelName: t.settingsPage.modelName,
+                    apiEndpointPlaceholder: t.settingsPage.apiEndpointPlaceholder,
+                    apiKeyPlaceholder: t.settingsPage.apiKeyPlaceholder,
+                    modelPlaceholder: t.settingsPage.modelPlaceholder,
+                    delete: t.settingsPage.aiDeleteConfig,
+                    deleteConfirm: t.settingsPage.aiDeleteConfirm,
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={handleAddConfig}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-bg-surface px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-primary hover:bg-bg-hover hover:text-text"
+              >
+                <Plus className="h-4 w-4" />
+                {t.settingsPage.aiAddConfig}
+              </button>
+            </div>
+          )}
           <p className="mt-3 text-xs text-text-muted">{t.settingsPage.aiConfigHint}</p>
         </SettingsSection>
 
@@ -127,6 +323,106 @@ export default function Settings() {
               <span className="text-xs text-text-muted">{t.settingsPage.currencyHint}</span>
             </Field>
           </div>
+        </SettingsSection>
+
+        {/* 经济日历偏好 - 用于 AI 周历汇总 */}
+        <SettingsSection
+          icon={<CalendarDays className="h-4 w-4" />}
+          title={language === "zh" ? "经济日历偏好" : "Economic Calendar Preferences"}
+          description={
+            language === "zh"
+              ? "在 AI 面板点击「本周经济日历」时,AI 会按下方配置生成结构化周历。"
+              : "Used by the AI Assistant's 'This Week's Calendar' quick action."
+          }
+        >
+          <CalendarPrefsEditor
+            prefs={calendarPrefs}
+            onChange={setCalendarPrefs}
+            language={language}
+          />
+        </SettingsSection>
+
+        {/* Local Data Storage */}
+        <SettingsSection
+          icon={<Database className="h-4 w-4" />}
+          title={language === "zh" ? "本地数据存储" : "Local Data Storage"}
+          description={
+            dataLocation === "filesystem"
+              ? (language === "zh" ? "数据已保存到本地 JSON 文件,清浏览器缓存也不会丢失。" : "Data is saved to local JSON files. Clearing browser cache will not lose data.")
+              : (language === "zh" ? "当前仅存在浏览器缓存中(有丢失风险),强烈建议选择文件夹迁移。" : "Currently only in browser cache (loss risk). Strongly recommend choosing a folder.")
+          }
+        >
+          {locationError && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>{locationError}</span>
+            </div>
+          )}
+          {migrated && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+              <FolderCheck className="h-3.5 w-3.5 shrink-0" />
+              <span>{language === "zh" ? "迁移完成,所有数据已写入 JSON 文件" : "Migration complete, all data written to JSON files"}</span>
+            </div>
+          )}
+          {!isFileSystemSupported() ? (
+            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+              {language === "zh"
+                ? "当前浏览器不支持本地文件存储。请使用 Chrome / Edge 等基于 Chromium 的浏览器。"
+                : "Browser does not support local file storage. Please use Chrome / Edge."}
+            </div>
+          ) : dataLocation === "filesystem" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+                <FolderCheck className="h-3.5 w-3.5" />
+                {language === "zh" ? "已绑定本地文件夹" : "Local folder bound"}
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenFolder}
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+              >
+                <FolderTree className="h-3.5 w-3.5" />
+                {language === "zh" ? "打开文件夹" : "Open Folder"}
+              </button>
+              <button
+                type="button"
+                onClick={migrateToDisk}
+                disabled={migrating}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-bg-hover disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${migrating ? "animate-spin" : ""}`} />
+                {language === "zh" ? "立即同步到磁盘" : "Sync to disk now"}
+              </button>
+              <button
+                type="button"
+                onClick={handleUnbind}
+                className="inline-flex items-center gap-1.5 rounded-md border border-loss/30 bg-bg-surface px-3 py-1.5 text-sm font-medium text-loss transition-colors hover:bg-loss/5"
+              >
+                {language === "zh" ? "解除绑定" : "Unbind"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePickFolder}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              >
+                <FolderOpen className="h-4 w-4" />
+                {language === "zh" ? "选择数据保存文件夹" : "Choose data folder"}
+              </button>
+              <button
+                type="button"
+                onClick={handleReauth}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+              >
+                {language === "zh" ? "重新授权已有文件夹" : "Re-authorize existing"}
+              </button>
+              <span className="text-[11px] text-text-muted">
+                {language === "zh" ? "推荐位置:文档 / Trading Journal / data" : "Suggested: Documents / Trading Journal / data"}
+              </span>
+            </div>
+          )}
         </SettingsSection>
 
         {/* Data Management */}
@@ -169,6 +465,133 @@ export default function Settings() {
           </div>
         </SettingsSection>
       </div>
+
+      {/* 文件夹浏览弹窗 */}
+      {showFileBrowser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowFileBrowser(false)}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <FolderTree className="h-5 w-5 text-primary" />
+                <div>
+                  <h3 className="font-body text-base font-semibold text-text">
+                    {language === "zh" ? "数据文件夹" : "Data Folder"}
+                  </h3>
+                  <p className="text-[11px] text-text-muted">
+                    {getDirName() || (language === "zh" ? "未命名文件夹" : "Unnamed folder")}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFileBrowser(false)}
+                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            {/* 弹窗内容：左侧文件列表 + 右侧文件内容 */}
+            <div className="flex min-h-0 flex-1">
+              {/* 左侧文件列表 */}
+              <div className="w-56 shrink-0 border-r border-border bg-bg-base/50 p-3">
+                <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                  {language === "zh" ? "文件列表" : "Files"}
+                </p>
+                <div className="flex flex-col gap-1">
+                  {fileList.length === 0 ? (
+                    <p className="px-1 py-4 text-center text-xs text-text-muted">
+                      {language === "zh" ? "暂无文件" : "No files"}
+                    </p>
+                  ) : (
+                    fileList.map((f) => (
+                      <button
+                        key={f.name}
+                        type="button"
+                        onClick={() => handleViewFile(f.name)}
+                        className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition-colors ${
+                          selectedFile === f.name
+                            ? "bg-primary/10 text-primary"
+                            : "text-text-secondary hover:bg-bg-hover hover:text-text"
+                        }`}
+                      >
+                        <FileJson className="h-3.5 w-3.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{f.name}</div>
+                          <div className="text-[10px] text-text-muted">
+                            {(f.size / 1024).toFixed(1)} KB
+                          </div>
+                        </div>
+                        {selectedFile === f.name && (
+                          <ChevronRight className="h-3 w-3 shrink-0" />
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 右侧文件内容 */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                {selectedFile ? (
+                  <>
+                    <div className="flex items-center justify-between border-b border-border px-4 py-2">
+                      <span className="font-mono text-xs text-text-secondary">
+                        {selectedFile}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(selectedFile, fileContent)}
+                        disabled={!fileContent || loadingFile}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-surface px-2.5 py-1 text-[11px] font-medium text-text transition-colors hover:bg-bg-hover disabled:opacity-50"
+                      >
+                        <Download className="h-3 w-3" />
+                        {language === "zh" ? "下载" : "Download"}
+                      </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto p-4">
+                      {loadingFile ? (
+                        <div className="flex h-full items-center justify-center">
+                          <RefreshCw className="h-5 w-5 animate-spin text-text-muted" />
+                        </div>
+                      ) : (
+                        <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-text">
+                          {fileContent || (language === "zh" ? "（空文件）" : "(empty)")}
+                        </pre>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+                    <FileJson className="h-10 w-10 text-text-muted opacity-40" />
+                    <p className="text-sm text-text-muted">
+                      {language === "zh"
+                        ? "点击左侧文件查看内容"
+                        : "Click a file on the left to view content"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 弹窗底部提示 */}
+            <div className="border-t border-border px-5 py-2.5">
+              <p className="text-[10px] text-text-muted">
+                {language === "zh"
+                  ? "💡 浏览器安全限制下无法直接打开系统文件管理器，可在此查看和下载数据文件。"
+                  : "💡 Browser security prevents opening the system file manager directly. You can view and download data files here."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
@@ -236,5 +659,401 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         checked ? "translate-x-4" : "translate-x-1"
       }`} />
     </button>
+  );
+}
+
+// 单个 AI 配置卡片:含名称/端点/密钥/模型,带 active 标记和删除按钮
+function AiConfigCard({
+  config, isActive, onSetActive, onUpdate, onRemove, inputClass, language, labels,
+}: {
+  config: AiConfigEntry;
+  isActive: boolean;
+  onSetActive: () => void;
+  onUpdate: (patch: Partial<Omit<AiConfigEntry, "id">>) => void;
+  onRemove: () => void;
+  inputClass: string;
+  language: Language;
+  labels: {
+    setActive: string;
+    active: string;
+    configName: string;
+    apiEndpoint: string;
+    apiKey: string;
+    modelName: string;
+    apiEndpointPlaceholder: string;
+    apiKeyPlaceholder: string;
+    modelPlaceholder: string;
+    delete: string;
+    deleteConfirm: string;
+  };
+}) {
+  const [showKey, setShowKey] = useState(false);
+  const isZh = language === "zh";
+  return (
+    <div
+      className={`rounded-md border bg-bg-surface px-4 py-3 transition-colors ${
+        isActive ? "border-primary/40 bg-primary/5" : "border-border"
+      }`}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        {/* Active 单选按钮(圆圈) */}
+        <button
+          type="button"
+          onClick={onSetActive}
+          title={isActive ? labels.active : labels.setActive}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+            isActive ? "border-primary bg-primary text-white" : "border-border bg-bg-surface text-transparent hover:border-text-secondary"
+          }`}
+        >
+          {isActive && <Star className="h-3 w-3" fill="currentColor" />}
+        </button>
+        <input
+          type="text"
+          value={config.name}
+          onChange={(e) => onUpdate({ name: e.target.value })}
+          placeholder={labels.configName}
+          className={`flex-1 rounded-sm border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-text outline-none transition-colors hover:border-border focus:border-primary ${
+            isActive ? "" : ""
+          }`}
+        />
+        {isActive && (
+          <span className="rounded-sm bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+            {labels.active}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(labels.deleteConfirm)) onRemove();
+          }}
+          title={labels.delete}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={labels.apiEndpoint}>
+          <input
+            type="text"
+            value={config.endpoint}
+            onChange={(e) => onUpdate({ endpoint: e.target.value })}
+            placeholder={labels.apiEndpointPlaceholder}
+            className={inputClass}
+          />
+        </Field>
+        <Field label={labels.apiKey}>
+          <div className="relative">
+            <input
+              type={showKey ? "text" : "password"}
+              value={config.apiKey}
+              onChange={(e) => onUpdate({ apiKey: e.target.value })}
+              placeholder={labels.apiKeyPlaceholder}
+              className={inputClass + " pr-9"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((v) => !v)}
+              title={showKey ? (isZh ? "隐藏" : "Hide") : (isZh ? "显示" : "Show")}
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-bg-hover hover:text-text"
+            >
+              {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        </Field>
+        <Field label={labels.modelName}>
+          <input
+            type="text"
+            value={config.model}
+            onChange={(e) => onUpdate({ model: e.target.value })}
+            placeholder={labels.modelPlaceholder}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+// 经济日历偏好编辑器(国家/品种/重要性三维度勾选 + 两个开关)
+function CalendarPrefsEditor({
+  prefs,
+  onChange,
+  language,
+}: {
+  prefs: import("@/types").CalendarPreferences;
+  onChange: (prefs: import("@/types").CalendarPreferences) => void;
+  language: Language;
+}) {
+  const isZh = language === "zh";
+
+  // 国家/地区配置(代码、旗帜、中英文名)
+  const countryOptions: { code: CalendarCountryCode; flag: string; nameZh: string; nameEn: string }[] = [
+    { code: "US", flag: "🇺🇸", nameZh: "美国", nameEn: "United States" },
+    { code: "EU", flag: "🇪🇺", nameZh: "欧元区", nameEn: "Eurozone" },
+    { code: "GB", flag: "🇬🇧", nameZh: "英国", nameEn: "United Kingdom" },
+    { code: "JP", flag: "🇯🇵", nameZh: "日本", nameEn: "Japan" },
+    { code: "AU", flag: "🇦🇺", nameZh: "澳大利亚", nameEn: "Australia" },
+    { code: "CA", flag: "🇨🇦", nameZh: "加拿大", nameEn: "Canada" },
+    { code: "CH", flag: "🇨🇭", nameZh: "瑞士", nameEn: "Switzerland" },
+    { code: "CN", flag: "🇨🇳", nameZh: "中国", nameEn: "China" },
+    { code: "NZ", flag: "🇳🇿", nameZh: "新西兰", nameEn: "New Zealand" },
+  ];
+
+  // 品种配置(标签 + 分组)
+  const instrumentOptions: { code: CalendarInstrumentCode; label: string; group: "forex" | "metals" | "indices" }[] = [
+    { code: "EURUSD", label: "EUR/USD", group: "forex" },
+    { code: "AUDUSD", label: "AUD/USD", group: "forex" },
+    { code: "GBPUSD", label: "GBP/USD", group: "forex" },
+    { code: "USDJPY", label: "USD/JPY", group: "forex" },
+    { code: "USDCAD", label: "USD/CAD", group: "forex" },
+    { code: "EURJPY", label: "EUR/JPY", group: "forex" },
+    { code: "GBPJPY", label: "GBP/JPY", group: "forex" },
+    { code: "AUDJPY", label: "AUD/JPY", group: "forex" },
+    { code: "EURGBP", label: "EUR/GBP", group: "forex" },
+    { code: "XAUUSD", label: "Gold (XAU/USD)", group: "metals" },
+    { code: "XAGUSD", label: "Silver (XAG/USD)", group: "metals" },
+    { code: "Copper", label: "Copper", group: "metals" },
+    { code: "US500", label: "S&P 500 (US500)", group: "indices" },
+    { code: "US30", label: "Dow Jones (US30)", group: "indices" },
+    { code: "NAS100", label: "Nasdaq (NAS100)", group: "indices" },
+    { code: "GER40", label: "DAX (GER40)", group: "indices" },
+  ];
+
+  // 切换国家勾选
+  function toggleCountry(code: CalendarCountryCode) {
+    const has = prefs.countries.includes(code);
+    onChange({
+      ...prefs,
+      countries: has ? prefs.countries.filter((c) => c !== code) : [...prefs.countries, code],
+    });
+  }
+
+  // 切换品种勾选
+  function toggleInstrument(code: CalendarInstrumentCode) {
+    const has = prefs.instruments.includes(code);
+    onChange({
+      ...prefs,
+      instruments: has ? prefs.instruments.filter((c) => c !== code) : [...prefs.instruments, code],
+    });
+  }
+
+  // 全选/全清当前分组品种
+  function toggleInstrumentGroup(group: "forex" | "metals" | "indices") {
+    const groupInstruments = instrumentOptions.filter((i) => i.group === group).map((i) => i.code);
+    const allSelected = groupInstruments.every((c) => prefs.instruments.includes(c));
+    if (allSelected) {
+      onChange({ ...prefs, instruments: prefs.instruments.filter((c) => !groupInstruments.includes(c)) });
+    } else {
+      const merged = new Set([...prefs.instruments, ...groupInstruments]);
+      onChange({ ...prefs, instruments: Array.from(merged) });
+    }
+  }
+
+  // 全部国家
+  function toggleAllCountries() {
+    if (prefs.countries.length === countryOptions.length) {
+      onChange({ ...prefs, countries: [] });
+    } else {
+      onChange({ ...prefs, countries: countryOptions.map((c) => c.code) });
+    }
+  }
+
+  // 全部品种
+  function toggleAllInstruments() {
+    if (prefs.instruments.length === instrumentOptions.length) {
+      onChange({ ...prefs, instruments: [] });
+    } else {
+      onChange({ ...prefs, instruments: instrumentOptions.map((i) => i.code) });
+    }
+  }
+
+  // 重要性筛选
+  const importanceOptions: { value: CalendarImportanceFilter; labelZh: string; labelEn: string; hint: string }[] = [
+    { value: "high_only", labelZh: "仅高(⭐⭐⭐)", labelEn: "High only (⭐⭐⭐)", hint: isZh ? "只看对市场影响最大的事件" : "Major market movers only" },
+    { value: "medium_and_high", labelZh: "中+高(⭐⭐以上)", labelEn: "Medium & High (⭐⭐+)", hint: isZh ? "推荐设置,平衡信息密度" : "Recommended, balanced" },
+    { value: "all", labelZh: "全部(⭐及以上)", labelEn: "All (⭐+)", hint: isZh ? "包含低重要性事件" : "Include low importance" },
+  ];
+
+  const groupLabels: Record<"forex" | "metals" | "indices", { zh: string; en: string }> = {
+    forex: { zh: "外汇", en: "Forex" },
+    metals: { zh: "贵金属/工业金属", en: "Metals" },
+    indices: { zh: "指数", en: "Indices" },
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* 国家勾选 */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-text-secondary">
+            {isZh ? "关注的国家/地区" : "Focus Countries"}
+          </span>
+          <button
+            type="button"
+            onClick={toggleAllCountries}
+            className="text-[11px] text-text-muted transition-colors hover:text-primary"
+          >
+            {prefs.countries.length === countryOptions.length
+              ? (isZh ? "全部取消" : "Deselect All")
+              : (isZh ? "全选" : "Select All")}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {countryOptions.map((c) => {
+            const checked = prefs.countries.includes(c.code);
+            return (
+              <label
+                key={c.code}
+                className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  checked
+                    ? "border-primary/50 bg-primary/5 text-text"
+                    : "border-border bg-bg-elevated text-text-muted hover:border-text-muted hover:text-text"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleCountry(c.code)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-primary"
+                />
+                <span className="text-base leading-none">{c.flag}</span>
+                <span className="font-medium">{isZh ? c.nameZh : c.nameEn}</span>
+                <span className="ml-auto text-[10px] text-text-muted">{c.code}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 品种勾选 */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-text-secondary">
+            {isZh ? "关注的交易品种" : "Focus Instruments"}
+          </span>
+          <button
+            type="button"
+            onClick={toggleAllInstruments}
+            className="text-[11px] text-text-muted transition-colors hover:text-primary"
+          >
+            {prefs.instruments.length === instrumentOptions.length
+              ? (isZh ? "全部取消" : "Deselect All")
+              : (isZh ? "全选" : "Select All")}
+          </button>
+        </div>
+        <div className="flex flex-col gap-3">
+          {(["forex", "metals", "indices"] as const).map((group) => {
+            const groupInstruments = instrumentOptions.filter((i) => i.group === group);
+            const allSelected = groupInstruments.every((i) => prefs.instruments.includes(i.code));
+            return (
+              <div key={group}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-text-muted">
+                    {isZh ? groupLabels[group].zh : groupLabels[group].en}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleInstrumentGroup(group)}
+                    className="text-[10px] text-text-muted transition-colors hover:text-primary"
+                  >
+                    {allSelected ? (isZh ? "取消该组" : "Clear group") : (isZh ? "选择该组" : "Select group")}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {groupInstruments.map((inst) => {
+                    const checked = prefs.instruments.includes(inst.code);
+                    return (
+                      <label
+                        key={inst.code}
+                        className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                          checked
+                            ? "border-primary/50 bg-primary/5 text-text"
+                            : "border-border bg-bg-elevated text-text-muted hover:border-text-muted hover:text-text"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleInstrument(inst.code)}
+                          className="h-3 w-3 cursor-pointer accent-primary"
+                        />
+                        <span className="font-medium">{inst.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 重要性筛选 */}
+      <div>
+        <span className="mb-2 block text-xs font-semibold text-text-secondary">
+          {isZh ? "重要性筛选" : "Importance Filter"}
+        </span>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {importanceOptions.map((opt) => {
+            const selected = prefs.importance === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={`flex cursor-pointer flex-col gap-0.5 rounded-md border px-3 py-2 transition-colors ${
+                  selected
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border bg-bg-elevated hover:border-text-muted"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="calendar-importance"
+                    checked={selected}
+                    onChange={() => onChange({ ...prefs, importance: opt.value })}
+                    className="h-3.5 w-3.5 cursor-pointer accent-primary"
+                  />
+                  <span className="text-xs font-semibold text-text">
+                    {isZh ? opt.labelZh : opt.labelEn}
+                  </span>
+                </div>
+                <span className="pl-5 text-[10px] text-text-muted">{opt.hint}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 附加开关 */}
+      <div className="flex flex-col gap-2 border-t border-border pt-3">
+        <ToggleRow
+          label={isZh ? "包含银行休市信息" : "Include Bank Holidays"}
+          hint={
+            isZh
+              ? "列出本周相关国家/地区的银行或交易所休市情况"
+              : "List bank/exchange holidays in focus countries"
+          }
+          checked={prefs.includeBankHolidays}
+          onChange={(v) => onChange({ ...prefs, includeBankHolidays: v })}
+        />
+        <ToggleRow
+          label={isZh ? "数据公布后标注市场情绪" : "Mark Market Sentiment After Release"}
+          hint={
+            isZh
+              ? "对已公布数据标注📈看多/📉看空/➖中性,并用通俗语言解释"
+              : "Annotate 📈 Bullish / 📉 Bearish / ➖ Neutral for released data"
+          }
+          checked={prefs.includeSentiment}
+          onChange={(v) => onChange({ ...prefs, includeSentiment: v })}
+        />
+      </div>
+
+      <div className="rounded-md border border-dashed border-border bg-bg-elevated/40 px-3 py-2 text-[11px] text-text-muted">
+        💡 {isZh
+          ? "点击 AI 面板的「📅 本周经济日历」按钮即可让 AI 生成结构化周历。LLM 训练数据可能滞后,实际公布时间以 Investing.com / TradingEconomics / Forex Factory 为准。"
+          : "Click the '📅 This Week's Calendar' button in the AI panel. LLM data may be stale; verify on Investing.com / TradingEconomics / Forex Factory."}
+      </div>
+    </div>
   );
 }

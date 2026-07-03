@@ -22,7 +22,8 @@ export function calcKpiMetrics(trades: Trade[], account: Account) {
   const totalEquity = calcAccountEquity(account, trades);
 
   // 今日盈亏
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const todayTrades = closedTrades.filter((t) => t.closeDate === today);
   const todayPnl = todayTrades.reduce((sum, t) => sum + t.pnl, 0);
   const todayPnlPercent = account.balance > 0 ? (todayPnl / account.balance) * 100 : 0;

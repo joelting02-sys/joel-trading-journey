@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <rect width="240" height="240" fill="#000000"/>
+  <text x="120" y="135"
+        text-anchor="middle"
+        font-family="'Didot', 'Bodoni 72', 'Playfair Display', 'Cormorant Garamond', 'Times New Roman', Georgia, serif"
+        font-size="78"
+        font-weight="400"
+        letter-spacing="2"
+        fill="#C9B68F">JOEL</text>
+  <line x1="55" y1="170" x2="95" y2="170" stroke="#C9B68F" stroke-width="1"/>
+  <text x="120" y="178"
+        text-anchor="middle"
+        font-family="'Didot', 'Bodoni 72', 'Playfair Display', 'Times New Roman', Georgia, serif"
+        font-size="18"
+        letter-spacing="3"
+        fill="#C9B68F">2026</text>
+  <line x1="145" y1="170" x2="185" y2="170" stroke="#C9B68F" stroke-width="1"/>
+</svg>

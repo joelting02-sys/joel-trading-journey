@@ -6,7 +6,10 @@ import {
   TrendingUp,
   Wallet,
   Bot,
+  CalendarDays,
   ClipboardList,
+  ClipboardCheck,
+  Calculator,
   Settings as SettingsIcon,
   X,
 } from "lucide-react";
@@ -25,6 +28,9 @@ export default function Sidebar() {
     { key: "analytics", label: t.nav.analytics, path: "/analytics", icon: TrendingUp },
     { key: "accounts", label: t.nav.accounts, path: "/accounts", icon: Wallet },
     { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: Bot },
+    { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
+    { key: "pre-market", label: t.nav.preMarket, path: "/pre-market", icon: ClipboardCheck },
+    { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
     { key: "sop", label: t.nav.sop, path: "/sop", icon: ClipboardList },
   ];
 
@@ -46,9 +52,11 @@ export default function Sidebar() {
         {/* Brand */}
         <div className="flex items-center justify-between gap-2.5 px-4 pb-6 pt-5">
           <div className="flex items-center gap-2.5">
-            <span className="select-none font-display text-xl font-bold tracking-tight text-text">
-              JOEL
-            </span>
+            <img
+              src="/joel-logo.svg"
+              alt="JOEL 2026"
+              className="h-10 w-10 rounded-sm object-cover"
+            />
             <span className="font-display text-[11px] font-normal tracking-wide text-text-secondary">
               {language === "zh" ? "交易日志" : "Trading Journal"}
             </span>
