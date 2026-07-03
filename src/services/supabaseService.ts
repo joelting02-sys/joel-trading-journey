@@ -6,8 +6,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
     let cachedUrl = "";
     let cachedKey = "";
 
+    const DEFAULT_URL = "https://imemwbgtxnkfodncfgal.supabase.co";
+    const DEFAULT_KEY = "sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO";
+
     export function getSupabaseClient(): SupabaseClient | null {
-      const { supabaseUrl, supabaseAnonKey } = useSettings.getState();
+      const state = useSettings.getState();
+      const supabaseUrl = state.supabaseUrl || DEFAULT_URL;
+      const supabaseAnonKey = state.supabaseAnonKey || DEFAULT_KEY;
+      
       if (!supabaseUrl || !supabaseAnonKey) {
         cachedClient = null;
         cachedUrl = "";
@@ -17,16 +23,24 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       if (cachedClient && cachedUrl === supabaseUrl && cachedKey === supabaseAnonKey) {
         return cachedClient;
       }
-      cachedUrl = supabaseUrl;
-      cachedKey = supabaseAnonKey;
-      cachedClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false
-        }
-      });
-      return cachedClient;
+      try {
+        cachedUrl = supabaseUrl;
+        cachedKey = supabaseAnonKey;
+        cachedClient = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+          }
+        });
+        return cachedClient;
+      } catch (err) {
+        console.error("Failed to create Supabase client:", err);
+        cachedClient = null;
+        cachedUrl = "";
+        cachedKey = "";
+        return null;
+      }
     }
 
     export function initializeSupabaseListener() {

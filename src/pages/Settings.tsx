@@ -157,6 +157,17 @@ export default function Settings() {
     }
   }
 
+  // 自动填充默认的 Supabase 凭证
+  useEffect(() => {
+    const settings = useSettings.getState();
+    if (!settings.supabaseUrl) {
+      settings.setSupabaseUrl("https://imemwbgtxnkfodncfgal.supabase.co");
+    }
+    if (!settings.supabaseAnonKey) {
+      settings.setSupabaseAnonKey("sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO");
+    }
+  }, []);
+
   // 检查是否需要迁移提示(有 localStorage 旧数据但未选目录)
   useEffect(() => {
     if (dataLocation !== "none") return;
