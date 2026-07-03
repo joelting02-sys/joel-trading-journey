@@ -19,7 +19,7 @@ export async function triggerSync(): Promise<SyncResult> {
   const settingsState = useSettings.getState();
   const tradeStoreState = useTradeStore.getState();
 
-  const passcode = settingsState.syncPasscode;
+  const passcode = settingsState.syncPasscode || "";
   const syncEnabled = settingsState.syncEnabled;
   const clientUpdatedAt = settingsState.clientUpdatedAt;
 
@@ -112,7 +112,7 @@ export async function triggerSync(): Promise<SyncResult> {
 
 export function onDataMutation() {
   const settings = useSettings.getState();
-  if (settings.syncEnabled && settings.syncPasscode.trim()) {
+  if (settings.syncEnabled && (settings.syncPasscode || "").trim()) {
     settings.updateClientTimestamp();
     // Trigger sync in background
     triggerSync().catch(() => {});

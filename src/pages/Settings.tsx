@@ -496,7 +496,7 @@ export default function Settings() {
               onChange={(val) => {
                 useSettings.setState({ syncEnabled: val });
                 // If turning on, run an initial sync
-                if (val && useSettings.getState().syncPasscode.trim()) {
+                if (val && (useSettings.getState().syncPasscode || "").trim()) {
                   setTimeout(handleCloudSync, 100);
                 }
               }}
@@ -506,7 +506,7 @@ export default function Settings() {
               <div className="relative flex items-center">
                 <input
                   type={showPasscode ? "text" : "password"}
-                  value={useSettings((s) => s.syncPasscode)}
+                  value={useSettings((s) => s.syncPasscode) || ""}
                   onChange={(e) => useSettings.setState({ syncPasscode: e.target.value })}
                   placeholder={language === "zh" ? "请输入你的同步密码" : "Enter sync passcode"}
                   className={`${inputClass} pr-10`}
@@ -526,7 +526,7 @@ export default function Settings() {
               </span>
             </Field>
 
-            {useSettings((s) => s.syncEnabled) && useSettings((s) => s.syncPasscode).trim() && (
+            {useSettings((s) => s.syncEnabled) && (useSettings((s) => s.syncPasscode) || "").trim() && (
               <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
                 <button
                   type="button"
@@ -537,10 +537,10 @@ export default function Settings() {
                   <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
                   {language === "zh" ? "立即手动同步" : "Sync Now"}
                 </button>
-                {useSettings((s) => s.lastSyncedAt) > 0 && (
+                {(useSettings((s) => s.lastSyncedAt) || 0) > 0 && (
                   <span className="text-xs text-text-muted">
                     {language === "zh" ? "上次同步时间: " : "Last synced: "}
-                    {new Date(useSettings((s) => s.lastSyncedAt)).toLocaleString()}
+                    {new Date(useSettings((s) => s.lastSyncedAt) || 0).toLocaleString()}
                   </span>
                 )}
               </div>
