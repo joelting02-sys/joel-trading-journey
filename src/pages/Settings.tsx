@@ -35,6 +35,12 @@ export default function Settings() {
   const setActiveAiConfigId = useSettings((s) => s.setActiveAiConfigId);
   const calendarPrefs = useSettings((s) => s.calendarPrefs);
   const setCalendarPrefs = useSettings((s) => s.setCalendarPrefs);
+  const supabaseUrl = useSettings((s) => s.supabaseUrl);
+  const supabaseAnonKey = useSettings((s) => s.supabaseAnonKey);
+  const supabaseUserEmail = useSettings((s) => s.supabaseUserEmail);
+  const supabaseSessionToken = useSettings((s) => s.supabaseSessionToken);
+  const syncEnabled = useSettings((s) => s.syncEnabled);
+  const lastSyncedAt = useSettings((s) => s.lastSyncedAt);
 
   const [defaultAccount, setDefaultAccount] = useState(accounts[0]?.id ?? "");
   const [dateFormat, setDateFormat] = useState("MMM DD, YYYY");
@@ -574,7 +580,7 @@ export default function Settings() {
             </div>
 
             {/* Authentication Form / Logged in status */}
-            {useSettings((s) => s.supabaseSessionToken) ? (
+            {supabaseSessionToken ? (
               <div className="rounded-md border border-border bg-bg-surface/50 p-4">
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -583,7 +589,7 @@ export default function Settings() {
                         {language === "zh" ? "已登录账号" : "Logged in as"}
                       </span>
                       <span className="text-sm font-medium text-text">
-                        {useSettings((s) => s.supabaseUserEmail)}
+                        {supabaseUserEmail}
                       </span>
                     </div>
                     <button
@@ -603,7 +609,7 @@ export default function Settings() {
                           ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
                           : "Automatically sync data to the cloud in the background when changes are made."
                       }
-                      checked={useSettings((s) => s.syncEnabled)}
+                      checked={syncEnabled}
                       onChange={(val) => {
                         useSettings.setState({ syncEnabled: val });
                         if (val) {
@@ -613,7 +619,7 @@ export default function Settings() {
                     />
                   </div>
 
-                  {useSettings((s) => s.syncEnabled) && (
+                  {syncEnabled && (
                     <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 mt-1">
                       <button
                         type="button"
@@ -624,10 +630,10 @@ export default function Settings() {
                         <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
                         {language === "zh" ? "立即同步" : "Sync Now"}
                       </button>
-                      {(useSettings((s) => s.lastSyncedAt) || 0) > 0 && (
+                      {(lastSyncedAt || 0) > 0 && (
                         <span className="text-xs text-text-muted">
                           {language === "zh" ? "上次同步时间: " : "Last synced: "}
-                          {new Date(useSettings((s) => s.lastSyncedAt) || 0).toLocaleString()}
+                          {new Date(lastSyncedAt || 0).toLocaleString()}
                         </span>
                       )}
                     </div>
@@ -661,7 +667,7 @@ export default function Settings() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@example.com"
                       className={inputClass}
-                      disabled={!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                      disabled={!supabaseUrl || !supabaseAnonKey}
                     />
                   </Field>
                   <Field label={language === "zh" ? "密码" : "Password"}>
@@ -672,7 +678,7 @@ export default function Settings() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         className={`${inputClass} pr-10`}
-                        disabled={!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                        disabled={!supabaseUrl || !supabaseAnonKey}
                       />
                       <button
                         type="button"
@@ -687,7 +693,7 @@ export default function Settings() {
                   <button
                     type="button"
                     onClick={handleAuth}
-                    disabled={authenticating || !useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)}
+                    disabled={authenticating || !supabaseUrl || !supabaseAnonKey}
                     className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 mt-2"
                   >
                     {authenticating ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
@@ -696,7 +702,7 @@ export default function Settings() {
                       : (language === "zh" ? "注 册" : "Sign Up")}
                   </button>
 
-                  {(!useSettings((s) => s.supabaseUrl) || !useSettings((s) => s.supabaseAnonKey)) && (
+                  {(!supabaseUrl || !supabaseAnonKey) && (
                     <p className="text-xs text-warning mt-1">
                       {language === "zh" ? "⚠️ 请先在上方配置 Supabase URL 与 Anon Key 凭证才能登录。" : "⚠️ Please enter your Supabase URL & Anon Key credentials first."}
                     </p>
