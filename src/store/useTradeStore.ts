@@ -8,6 +8,7 @@ import {
   loadTradesFromDisk,
   loadAccountsFromDisk,
 } from "@/services/dataStorage";
+import { onDataMutation } from "@/services/syncService";
 
 // 不预设任何账号和交易记录,首次使用为空
 const initialTrades: Trade[] = [];
@@ -66,26 +67,36 @@ export const useTradeStore = create<TradeStore>()(
       activeAccountId: "",
       sidebarOpen: false,
 
-      addTrade: (trade) =>
-        set((state) => ({ trades: [trade, ...state.trades] })),
+      addTrade: (trade) => {
+        set((state) => ({ trades: [trade, ...state.trades] }));
+        onDataMutation();
+      },
 
-      updateTrade: (trade) =>
+      updateTrade: (trade) => {
         set((state) => ({
           trades: state.trades.map((t) => (t.id === trade.id ? trade : t)),
-        })),
+        }));
+        onDataMutation();
+      },
 
-      deleteTrade: (id) =>
-        set((state) => ({ trades: state.trades.filter((t) => t.id !== id) })),
+      deleteTrade: (id) => {
+        set((state) => ({ trades: state.trades.filter((t) => t.id !== id) }));
+        onDataMutation();
+      },
 
-      addAccount: (account) =>
-        set((state) => ({ accounts: [...state.accounts, account] })),
+      addAccount: (account) => {
+        set((state) => ({ accounts: [...state.accounts, account] }));
+        onDataMutation();
+      },
 
-      updateAccount: (account) =>
+      updateAccount: (account) => {
         set((state) => ({
           accounts: state.accounts.map((a) => (a.id === account.id ? account : a)),
-        })),
+        }));
+        onDataMutation();
+      },
 
-      deleteAccount: (id) =>
+      deleteAccount: (id) => {
         set((state) => ({
           accounts: state.accounts.filter((a) => a.id !== id),
           trades: state.trades.filter((t) => t.account !== id),
@@ -93,7 +104,9 @@ export const useTradeStore = create<TradeStore>()(
             state.activeAccountId === id
               ? state.accounts.find((a) => a.id !== id)?.id ?? ""
               : state.activeAccountId,
-        })),
+        }));
+        onDataMutation();
+      },
 
       setActiveAccount: (id) => set({ activeAccountId: id }),
       setActiveAccountId: (id) => set({ activeAccountId: id }),

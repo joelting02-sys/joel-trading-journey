@@ -22,6 +22,7 @@ import {
   loadSettingsFromDisk,
   loadSopFromDisk,
 } from "@/services/dataStorage";
+import { onDataMutation } from "@/services/syncService";
 
 export type CurrencyCode = "USD" | "EUR" | "GBP" | "JPY" | "MYR";
 
@@ -144,6 +145,13 @@ interface SettingsStore {
   preMarketChecks: PreMarketCheck[];
   // 仓位计算器历史
   positionCalcHistory: PositionCalcRecord[];
+
+  // 云端同步配置
+  syncPasscode: string;
+  syncEnabled: boolean;
+  lastSyncedAt: number;
+  clientUpdatedAt: number;
+
   setLanguage: (lang: Language) => void;
   setCurrency: (cur: CurrencyCode) => void;
   // AI 配置管理
@@ -166,6 +174,12 @@ interface SettingsStore {
   deletePreMarketCheck: (id: string) => void;
   addPositionCalcRecord: (record: PositionCalcRecord) => void;
   deletePositionCalcRecord: (id: string) => void;
+  
+  setSyncPasscode: (code: string) => void;
+  setSyncEnabled: (enabled: boolean) => void;
+  setLastSyncedAt: (ts: number) => void;
+  updateClientTimestamp: () => void;
+
   t: () => TranslationKeys;
   hydrateFromDisk: () => Promise<void>;
 }
@@ -214,6 +228,16 @@ export const useSettings = create<SettingsStore>()(
       calendarUpdatedAt: "",
       preMarketChecks: [],
       positionCalcHistory: [],
+      
+      syncPasscode: "",
+      syncEnabled: false,
+      lastSyncedAt: 0,
+      clientUpdatedAt: 0,
+      setSyncPasscode: (code) => set({ syncPasscode: code }),
+      setSyncEnabled: (enabled) => set({ syncEnabled: enabled }),
+      setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
+      updateClientTimestamp: () => set({ clientUpdatedAt: Date.now() }),
+
       setLanguage: (lang) =>
         set((state) => {
           // 如果当前仍为默认规则,切换语言时同步替换为对应语言版本
@@ -253,16 +277,22 @@ export const useSettings = create<SettingsStore>()(
       // =========================================================
       setSopRules: (sopRules) => set({ sopRules }),
       setChatMessages: (chatMessages) => set({ chatMessages }),
-      addSopRule: (rule) =>
-        set((state) => ({ sopRules: [...state.sopRules, rule] })),
-      updateSopRule: (rule) =>
+      addSopRule: (rule) => {
+        set((state) => ({ sopRules: [...state.sopRules, rule] }));
+        onDataMutation();
+      },
+      updateSopRule: (rule) => {
         set((state) => ({
           sopRules: state.sopRules.map((r) => (r.id === rule.id ? rule : r)),
-        })),
-      deleteSopRule: (id) =>
-        set((state) => ({ sopRules: state.sopRules.filter((r) => r.id !== id) })),
+        }));
+        onDataMutation();
+      },
+      deleteSopRule: (id) => {
+        set((state) => ({ sopRules: state.sopRules.filter((r) => r.id !== id) }));
+        onDataMutation();
+      },
       // 一次性应用多个 AI 提议(按 add / update / remove 顺序处理)
-      applySopProposals: (proposals) =>
+      applySopProposals: (proposals) => {
         set((state) => {
           let rules = [...state.sopRules];
           // AI 提议的 category 可能为 "general",映射到 SopCategory(用 psychology 兜底)
@@ -290,7 +320,9 @@ export const useSettings = create<SettingsStore>()(
             }
           }
           return { sopRules: rules };
-        }),
+        });
+        onDataMutation();
+      },
       addChatMessage: (msg) =>
         set((state) => ({ chatMessages: [...state.chatMessages, msg] })),
       deleteChatMessage: (id) =>
@@ -331,7 +363,7 @@ export const useSettings = create<SettingsStore>()(
     {
       name: "tj-settings-store",
       storage: settingsDualStorage,
-      version: 5,
+      version: 6,
       // 持久化配置和聊天记录(聊天图片已压缩,不会超限)
       partialize: ((state: SettingsStore) => ({
         language: state.language,
@@ -345,6 +377,10 @@ export const useSettings = create<SettingsStore>()(
         calendarUpdatedAt: state.calendarUpdatedAt,
         preMarketChecks: state.preMarketChecks,
         positionCalcHistory: state.positionCalcHistory,
+        syncPasscode: state.syncPasscode,
+        syncEnabled: state.syncEnabled,
+        lastSyncedAt: state.lastSyncedAt,
+        clientUpdatedAt: state.clientUpdatedAt,
       })) as (state: SettingsStore) => SettingsStore,
       migrate: ((persistedState: unknown, version: number) => {
         const s = persistedState as Partial<SettingsStore> & { aiConfig?: AiConfig };
@@ -384,6 +420,13 @@ export const useSettings = create<SettingsStore>()(
           s.calendarUpdatedAt = "";
           s.preMarketChecks = [];
           s.positionCalcHistory = [];
+        }
+        // v5→v6: 新增同步配置
+        if (version < 6) {
+          s.syncPasscode = "";
+          s.syncEnabled = false;
+          s.lastSyncedAt = 0;
+          s.clientUpdatedAt = 0;
         }
         return s as unknown as SettingsStore;
       }) as (persistedState: unknown, version: number) => SettingsStore,

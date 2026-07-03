@@ -20,6 +20,7 @@ import {
   readDataFileText,
   type DataLocation,
 } from "@/services/dataStorage";
+import { triggerSync } from "@/services/syncService";
 
 export default function Settings() {
   const accounts = useTradeStore((s) => s.accounts);
@@ -53,6 +54,41 @@ export default function Settings() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [loadingFile, setLoadingFile] = useState(false);
+
+  // 云端同步相关状态
+  const [syncingCloud, setSyncingCloud] = useState(false);
+  const [syncError, setSyncError] = useState("");
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
+
+  async function handleCloudSync() {
+    setSyncingCloud(true);
+    setSyncError("");
+    setSyncSuccess(false);
+    setSyncStatusMsg("");
+    try {
+      const res = await triggerSync();
+      if (res.success) {
+        setSyncSuccess(true);
+        if (res.status === "synced") {
+          setSyncStatusMsg(language === "zh" ? "同步成功：数据已保存至云端。" : "Synced: Data uploaded to cloud.");
+        } else if (res.status === "updated_server") {
+          setSyncStatusMsg(language === "zh" ? "云端数据已成功更新为最新本地数据。" : "Cloud data updated to latest local data.");
+        } else if (res.status === "updated_client") {
+          setSyncStatusMsg(language === "zh" ? "本地数据已成功更新为最新云端数据。" : "Local data updated to latest cloud data.");
+        } else if (res.status === "in_sync") {
+          setSyncStatusMsg(language === "zh" ? "两端数据已是一致，无需更新。" : "Data is already in sync.");
+        }
+      } else {
+        setSyncError(res.error || "Sync failed");
+      }
+    } catch (e) {
+      setSyncError((e as Error).message || "Sync failed");
+    } finally {
+      setSyncingCloud(false);
+    }
+  }
 
   // 检查是否需要迁移提示(有 localStorage 旧数据但未选目录)
   useEffect(() => {
@@ -423,6 +459,93 @@ export default function Settings() {
               </span>
             </div>
           )}
+        </SettingsSection>
+
+        {/* Cloud Database Sync */}
+        <SettingsSection
+          icon={<RefreshCw className="h-4 w-4" />}
+          title={language === "zh" ? "云端数据库同步" : "Cloud Database Sync"}
+          description={
+            language === "zh"
+              ? "使用 Cloudflare D1 数据库在手机和电脑之间同步你的交易记录。"
+              : "Sync your journal data between mobile and desktop devices using Cloudflare D1."
+          }
+        >
+          {syncError && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>{syncError}</span>
+            </div>
+          )}
+          {syncSuccess && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+              <FolderCheck className="h-3.5 w-3.5 shrink-0" />
+              <span>{syncStatusMsg}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4">
+            <ToggleRow
+              label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
+              hint={
+                language === "zh"
+                  ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
+                  : "Automatically sync data to the cloud in the background when changes are made."
+              }
+              checked={useSettings((s) => s.syncEnabled)}
+              onChange={(val) => {
+                useSettings.setState({ syncEnabled: val });
+                // If turning on, run an initial sync
+                if (val && useSettings.getState().syncPasscode.trim()) {
+                  setTimeout(handleCloudSync, 100);
+                }
+              }}
+            />
+
+            <Field label={language === "zh" ? "同步密码 (Sync Key)" : "Sync Key"}>
+              <div className="relative flex items-center">
+                <input
+                  type={showPasscode ? "text" : "password"}
+                  value={useSettings((s) => s.syncPasscode)}
+                  onChange={(e) => useSettings.setState({ syncPasscode: e.target.value })}
+                  placeholder={language === "zh" ? "请输入你的同步密码" : "Enter sync passcode"}
+                  className={`${inputClass} pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasscode(!showPasscode)}
+                  className="absolute right-3 text-text-muted hover:text-text"
+                >
+                  {showPasscode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <span className="text-xs text-text-muted">
+                {language === "zh"
+                  ? "输入一个自定义的加密密码。在手机和电脑上输入相同的密码即可共享同一个云数据库。"
+                  : "Enter a custom passcode. Use the exact same passcode on both mobile and desktop to share data."}
+              </span>
+            </Field>
+
+            {useSettings((s) => s.syncEnabled) && useSettings((s) => s.syncPasscode).trim() && (
+              <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={handleCloudSync}
+                  disabled={syncingCloud}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
+                  {language === "zh" ? "立即手动同步" : "Sync Now"}
+                </button>
+                {useSettings((s) => s.lastSyncedAt) > 0 && (
+                  <span className="text-xs text-text-muted">
+                    {language === "zh" ? "上次同步时间: " : "Last synced: "}
+                    {new Date(useSettings((s) => s.lastSyncedAt)).toLocaleString()}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </SettingsSection>
 
         {/* Data Management */}
