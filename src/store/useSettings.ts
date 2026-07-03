@@ -235,8 +235,8 @@ export const useSettings = create<SettingsStore>()(
       preMarketChecks: [],
       positionCalcHistory: [],
       
-      supabaseUrl: "",
-      supabaseAnonKey: "",
+      supabaseUrl: "https://imemwbgtxnkfodncfgal.supabase.co",
+      supabaseAnonKey: "sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO",
       supabaseUserEmail: "",
       supabaseSessionToken: "",
       syncEnabled: false,
