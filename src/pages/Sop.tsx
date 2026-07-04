@@ -49,15 +49,17 @@ export default function Sop() {
     return map;
   }, [sopRules]);
 
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!setDropdownOpen) return;
     const close = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && target.closest("[data-sop-dropdown]")) return;
+      const target = e.target as Node | null;
+      if (dropdownRef.current && target && dropdownRef.current.contains(target)) return;
       setSetDropdownOpen(false);
     };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, [setDropdownOpen]);
 
   const activeSet = useMemo(() => sopSets.find((s) => s.id === activeSopSetId) ?? sopSets[0], [sopSets, activeSopSetId]);
@@ -153,7 +155,7 @@ export default function Sop() {
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-surface px-4 py-3">
         <FolderOpen className="h-4 w-4 text-primary shrink-0" />
         <span className="text-xs font-medium text-text-secondary">{t.sopPage.sopSets}:</span>
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setSetDropdownOpen(!setDropdownOpen)}

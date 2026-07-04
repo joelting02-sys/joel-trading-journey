@@ -207,7 +207,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
           tradeStoreState.setTrades(trades);
           tradeStoreState.setAccounts(accounts);
-          settingsState.setSopRules(sop);
+          if (Array.isArray(sop) && sop.length > 0) {
+            const first = sop[0];
+            if (first && typeof first === "object" && "rules" in first && Array.isArray(first.rules)) {
+              settingsState.setSopSets(sop);
+            } else {
+              settingsState.setSopSets([{ id: "sop-default", name: "Default SOP", rules: sop, createdAt: Date.now(), updatedAt: Date.now() }]);
+            }
+          }
 
           const settingsUpdate: Partial<any> = {};
           if (s.language) settingsUpdate.language = s.language;
