@@ -584,14 +584,14 @@ export default function Settings() {
               </div>
             </SettingsSection>
 
-            {/* Supabase Cloud Sync */}
+            {/* Cloud Sync */}
             <SettingsSection
               icon={<RefreshCw className="h-4 w-4" />}
-              title={language === "zh" ? "Supabase 云端账号同步" : "Supabase Cloud Sync"}
+              title={language === "zh" ? "云端同步" : "Cloud Sync"}
               description={
                 language === "zh"
-                  ? "使用 Supabase 用户认证与 Postgres 数据库，在手机与电脑之间多端同步你的交易日志。"
-                  : "Sync your journal data between mobile and desktop devices using Supabase Auth & Postgres."
+                  ? "数据在后台自动同步，多设备无缝切换。"
+                  : "Data syncs automatically in the background across all your devices."
               }
             >
               {syncError && (
@@ -607,227 +607,164 @@ export default function Settings() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-4">
-                {/* Supabase Connection Status (Fully Private & Encrypted) */}
-                <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
-                  <FolderCheck className="h-4 w-4 shrink-0" />
-                  <span>
-                    {language === "zh"
-                      ? "已加密内置云端数据库连接（安全保密）"
-                      : "Private Cloud Database Connected (Secure)"}
-                  </span>
-                </div>
-
-                {/* Authentication Form / Logged in status */}
-                {supabaseSessionToken ? (
-                  <div className="rounded-md border border-border bg-bg-surface/50 p-4">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <span className="text-xs text-text-muted block">
-                            {language === "zh" ? "已登录账号" : "Logged in as"}
-                          </span>
-                          <span className="text-sm font-medium text-text">
-                            {supabaseUserEmail}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleSignOut}
-                          className="rounded-md border border-loss/30 px-3 py-1.5 text-xs font-medium text-loss transition-colors hover:bg-loss/5"
-                        >
-                          {language === "zh" ? "退出登录" : "Logout"}
-                        </button>
+              {supabaseSessionToken ? (
+                <div className="flex flex-col gap-3">
+                  {/* Logged in status bar */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                        {supabaseUserEmail[0]?.toUpperCase()}
                       </div>
-
-                      <div className="border-t border-border pt-3 mt-1">
-                        <ToggleRow
-                          label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
-                          hint={
-                            language === "zh"
-                              ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
-                              : "Automatically sync data to the cloud in the background when changes are made."
-                          }
-                          checked={syncEnabled}
-                          onChange={(val) => {
-                            useSettings.setState({ syncEnabled: val });
-                            if (val) {
-                              setTimeout(handleCloudSync, 100);
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {syncEnabled && (
-                        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 mt-1">
-                          <button
-                            type="button"
-                            onClick={handleCloudSync}
-                            disabled={syncingCloud}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-                          >
-                            <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
-                            {language === "zh" ? "立即同步" : "Sync Now"}
-                          </button>
-                          {(lastSyncedAt || 0) > 0 && (
-                            <span className="text-xs text-text-muted">
-                              {language === "zh" ? "上次同步时间: " : "Last synced: "}
-                              {new Date(lastSyncedAt || 0).toLocaleString()}
-                            </span>
-                          )}
+                      <div>
+                        <div className="text-sm font-medium text-text">{supabaseUserEmail}</div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                          {syncingCloud
+                            ? (language === "zh" ? "同步中..." : "Syncing...")
+                            : (lastSyncedAt || 0) > 0
+                              ? (language === "zh" ? `上次同步: ${getTimeAgo(new Date(lastSyncedAt).toISOString(), language)}` : `Synced ${getTimeAgo(new Date(lastSyncedAt).toISOString(), language)}`)
+                              : (language === "zh" ? "已连接" : "Connected")}
                         </div>
-                      )}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-loss/30 hover:text-loss"
+                    >
+                      {language === "zh" ? "退出" : "Sign Out"}
+                    </button>
+                  </div>
 
-                    {/* Device List */}
-                    <div className="border-t border-border pt-3 mt-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-text-secondary">
-                          {language === "zh" ? "已登录设备" : "Active Devices"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleLoadDevices}
-                          disabled={loadingDevices}
-                          className="text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
-                        >
-                          {loadingDevices
-                            ? (language === "zh" ? "加载中..." : "Loading...")
-                            : (language === "zh" ? "刷新" : "Refresh")}
-                        </button>
-                      </div>
+                  {/* Device List (collapsible) */}
+                  <details className="group">
+                    <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-text">
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                      {language === "zh" ? "已登录设备" : "Active Devices"}
+                      <span className="text-[10px] text-text-muted">({devices.length})</span>
+                    </summary>
+                    <div className="mt-2 flex flex-col gap-2 pl-1">
+                      <button
+                        type="button"
+                        onClick={handleLoadDevices}
+                        disabled={loadingDevices}
+                        className="self-start text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
+                      >
+                        {loadingDevices
+                          ? (language === "zh" ? "加载中..." : "Loading...")
+                          : (language === "zh" ? "刷新列表" : "Refresh")}
+                      </button>
                       {devices.length === 0 ? (
-                        <p className="text-xs text-text-muted py-2">
-                          {language === "zh" ? "暂无设备记录" : "No device records"}
+                        <p className="text-xs text-text-muted py-1">
+                          {language === "zh" ? "暂无记录" : "No records"}
                         </p>
                       ) : (
-                        <div className="flex flex-col gap-2">
-                          {devices.map((device) => {
-                            const isCurrent = device.isCurrent;
-                            const timeAgo = getTimeAgo(device.last_seen, language);
-                            return (
-                              <div
-                                key={device.id}
-                                className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
-                                  isCurrent
-                                    ? "border-primary/30 bg-primary/5"
-                                    : "border-border bg-bg-elevated"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <Monitor className="h-4 w-4 shrink-0 text-text-muted" />
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-medium text-text truncate">
-                                        {device.device_name}
+                        devices.map((device) => {
+                          const isCurrent = device.isCurrent;
+                          const timeAgo = getTimeAgo(device.last_seen, language);
+                          return (
+                            <div
+                              key={device.id}
+                              className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
+                                isCurrent ? "border-primary/30 bg-primary/5" : "border-border bg-bg-elevated"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Monitor className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-text truncate">{device.device_name}</span>
+                                    {isCurrent && (
+                                      <span className="shrink-0 rounded-sm bg-primary/15 px-1 py-0.5 text-[9px] font-semibold text-primary">
+                                        {language === "zh" ? "当前" : "This"}
                                       </span>
-                                      {isCurrent && (
-                                        <span className="shrink-0 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                          {language === "zh" ? "当前设备" : "This device"}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[11px] text-text-muted">
-                                      {device.browser} · {device.os} · {timeAgo}
-                                    </span>
+                                    )}
                                   </div>
+                                  <span className="text-[10px] text-text-muted">
+                                    {device.browser} · {timeAgo}
+                                  </span>
                                 </div>
-                                {!isCurrent && (
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const ok = await useDialogStore.getState().confirm({
-                                        message: language === "zh"
-                                          ? `确定将此设备「${device.device_name}」退出登录？`
-                                          : `Remove this device "${device.device_name}" from active sessions?`,
-                                        variant: "warning",
-                                      });
-                                      if (ok) handleRemoveDevice(device.id);
-                                    }}
-                                    className="ml-2 shrink-0 rounded-sm p-1.5 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
-                                    title={language === "zh" ? "移除此设备" : "Remove device"}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
                               </div>
-                            );
-                          })}
-                        </div>
+                              {!isCurrent && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const ok = await useDialogStore.getState().confirm({
+                                      message: language === "zh"
+                                        ? `将「${device.device_name}」退出登录？`
+                                        : `Remove "${device.device_name}"?`,
+                                      variant: "warning",
+                                    });
+                                    if (ok) handleRemoveDevice(device.id);
+                                  }}
+                                  className="ml-2 shrink-0 rounded-sm p-1 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
+                  </details>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-2 border-b border-border pb-2">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode("login"); setSyncError(""); }}
+                      className={`text-xs pb-1.5 font-medium border-b-2 transition-all ${authMode === "login" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                    >
+                      {language === "zh" ? "登录" : "Login"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode("register"); setSyncError(""); }}
+                      className={`text-xs pb-1.5 font-medium border-b-2 transition-all ${authMode === "register" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                    >
+                      {language === "zh" ? "注册" : "Register"}
+                    </button>
                   </div>
-                ) : (
-                  <div className="rounded-md border border-border bg-bg-surface/50 p-4">
-                    <div className="mb-4 border-b border-border pb-2 flex gap-4">
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={language === "zh" ? "邮箱" : "Email"}
+                      className={inputClass}
+                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showSupabasePassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={language === "zh" ? "密码" : "Password"}
+                        className={`${inputClass} pr-10`}
+                      />
                       <button
                         type="button"
-                        onClick={() => { setAuthMode("login"); setSyncError(""); }}
-                        className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "login" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                        onClick={() => setShowSupabasePassword(!showSupabasePassword)}
+                        className="absolute right-3 text-text-muted hover:text-text"
                       >
-                        {language === "zh" ? "账号登录" : "Login"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setAuthMode("register"); setSyncError(""); }}
-                        className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "register" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
-                      >
-                        {language === "zh" ? "注册新账号" : "Register"}
+                        {showSupabasePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
-
-                    <div className="flex flex-col gap-3">
-                      <Field label={language === "zh" ? "邮箱" : "Email"}>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="name@example.com"
-                          className={inputClass}
-                          disabled={!supabaseUrl || !supabaseAnonKey}
-                        />
-                      </Field>
-                      <Field label={language === "zh" ? "密码" : "Password"}>
-                        <div className="relative flex items-center">
-                          <input
-                            type={showSupabasePassword ? "text" : "password"}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className={`${inputClass} pr-10`}
-                            disabled={!supabaseUrl || !supabaseAnonKey}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowSupabasePassword(!showSupabasePassword)}
-                            className="absolute right-3 text-text-muted hover:text-text"
-                          >
-                            {showSupabasePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </Field>
-
-                      <button
-                        type="button"
-                        onClick={handleAuth}
-                        disabled={authenticating || !supabaseUrl || !supabaseAnonKey}
-                        className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 mt-2"
-                      >
-                        {authenticating ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
-                        {authMode === "login"
-                          ? (language === "zh" ? "登 录" : "Log In")
-                          : (language === "zh" ? "注 册" : "Sign Up")}
-                      </button>
-
-                      {(!supabaseUrl || !supabaseAnonKey) && (
-                        <p className="text-xs text-warning mt-1">
-                          {language === "zh" ? "⚠️ 请先在上方配置 Supabase URL 与 Anon Key 凭证才能登录。" : "⚠️ Please enter your Supabase URL & Anon Key credentials first."}
-                        </p>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAuth}
+                      disabled={authenticating}
+                      className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {authenticating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
+                      {authMode === "login"
+                        ? (language === "zh" ? "登录" : "Log In")
+                        : (language === "zh" ? "注册" : "Sign Up")}
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </SettingsSection>
 
             {/* Local Data Backup & Recovery */}
