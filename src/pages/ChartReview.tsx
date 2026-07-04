@@ -5,6 +5,7 @@ import {
   ISeriesApi,
   CandlestickSeries,
   UTCTimestamp,
+  createSeriesMarkers,
 } from "lightweight-charts";
 import {
   TrendingUp, TrendingDown, Plus, Trash2, Save, X,
@@ -48,6 +49,7 @@ export default function ChartReview() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersApiRef = useRef<any>(null);
 
   // 状态
   const [selectedSymbol, setSelectedSymbol] = useState("EUR/USD");
@@ -124,6 +126,7 @@ export default function ChartReview() {
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
+    markersApiRef.current = createSeriesMarkers(candleSeries, []);
 
       // 点击事件 - 标记模式下添加标记
       chart.subscribeClick((param) => {
@@ -169,12 +172,13 @@ export default function ChartReview() {
     return () => {
       window.removeEventListener("resize", handleResize);
       chart.remove();
+      markersApiRef.current = null;
     };
   }, []);
 
   // ========== 更新标记 ==========
   useEffect(() => {
-    if (!candleSeriesRef.current) return;
+    if (!markersApiRef.current) return;
 
     const tvMarkers = markers.map((m) => {
       let color = PRIMARY;
@@ -225,8 +229,7 @@ export default function ChartReview() {
       };
     });
 
-    // v5 API: setMarkers 可能在类型定义中缺失，但运行时存在
-    (candleSeriesRef.current as unknown as { setMarkers: (m: typeof tvMarkers) => void }).setMarkers(tvMarkers);
+    markersApiRef.current.setMarkers(tvMarkers);
   }, [markers]);
 
   // ========== 获取K线数据 ==========
