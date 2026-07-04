@@ -43,9 +43,21 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       }
     }
 
-    export function initializeSupabaseListener() {
+    export async function initializeSupabaseListener() {
       const client = getSupabaseClient();
       if (!client) return;
+
+      try {
+        const { data: { session } } = await client.auth.getSession();
+        if (session && session.user) {
+          useSettings.setState({
+            supabaseUserEmail: session.user.email || "",
+            supabaseSessionToken: session.access_token || ""
+          });
+        }
+      } catch {
+        // session 恢复失败静默处理
+      }
 
       client.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {

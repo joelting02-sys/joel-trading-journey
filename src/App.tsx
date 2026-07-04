@@ -35,7 +35,11 @@ export default function App() {
         await useTradeStore.getState().hydrateFromDisk();
         await useSettings.getState().hydrateFromDisk();
       }
-      initializeSupabaseListener();
+      try {
+        await initializeSupabaseListener();
+      } catch {
+        // Supabase 初始化失败不影响本地使用
+      }
     })();
   }, []);
 

@@ -13,17 +13,23 @@ create table if not exists user_sync (
 -- Enable Row Level Security (RLS)
 alter table user_sync enable row level security;
 
+-- Drop existing policies (safe for re-running)
+drop policy if exists "Users can select their own sync record" on user_sync;
+drop policy if exists "Users can insert their own sync record" on user_sync;
+drop policy if exists "Users can update their own sync record" on user_sync;
+
 -- Create policy to allow users to read only their own record
 create policy "Users can select their own sync record"
   on user_sync for select
   using (auth.uid() = id);
 
 -- Create policy to allow users to insert only their own record
-create policy "Users can upsert their own sync record"
+create policy "Users can insert their own sync record"
   on user_sync for insert
   with check (auth.uid() = id);
 
--- Create policy to allow users to update only their own record
+-- Create policy to allow users to update only their own record (with check for upsert)
 create policy "Users can update their own sync record"
   on user_sync for update
-  using (auth.uid() = id);
+  using (auth.uid() = id)
+  with check (auth.uid() = id);

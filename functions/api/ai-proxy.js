@@ -1,3 +1,13 @@
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Target-URL',
+};
+
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
 export async function onRequestPost(context) {
   const req = context.request;
   const targetUrl = req.headers.get('x-target-url');
@@ -5,7 +15,7 @@ export async function onRequestPost(context) {
   if (!targetUrl) {
     return new Response(JSON.stringify({ error: 'Missing X-Target-URL header' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 
@@ -26,12 +36,13 @@ export async function onRequestPost(context) {
       status: response.status,
       headers: {
         'Content-Type': response.headers.get('content-type') || 'application/json',
+        ...corsHeaders,
       },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: `Proxy error: ${err.message || err}` }), {
       status: 502,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 }
