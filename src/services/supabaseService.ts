@@ -155,7 +155,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory,
-                drawdownEvents: settingsState.drawdownEvents
+                drawdownEvents: settingsState.drawdownEvents,
+                activeAccountId: tradeStoreState.activeAccountId
               },
               sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt || Date.now()
@@ -188,7 +189,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory,
-                drawdownEvents: settingsState.drawdownEvents
+                drawdownEvents: settingsState.drawdownEvents,
+                activeAccountId: tradeStoreState.activeAccountId
               },
               sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt
@@ -209,6 +211,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
           tradeStoreState.setTrades(trades);
           tradeStoreState.setAccounts(accounts);
+          if (s.activeAccountId) tradeStoreState.setActiveAccountId(s.activeAccountId);
           if (Array.isArray(sop) && sop.length > 0) {
             const first = sop[0];
             if (first && typeof first === "object" && "rules" in first && Array.isArray(first.rules)) {

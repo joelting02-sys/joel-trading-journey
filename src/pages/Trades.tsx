@@ -21,12 +21,12 @@ export default function Trades() {
   const allTrades = useTradeStore((s) => s.trades);
   const deleteTrade = useTradeStore((s) => s.deleteTrade);
   const accounts = useTradeStore((s) => s.accounts);
+  const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
   const navigate = useNavigate();
 
-  // 账户选择：all = 所有账户，或指定某个账户
-  const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [accountFilter, setAccountFilter] = useState<string>(activeAccountId || "all");
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("openDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");

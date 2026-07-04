@@ -31,6 +31,7 @@ export default function NewTrade() {
   const navigate = useNavigate();
   const addTrade = useTradeStore((s) => s.addTrade);
   const accounts = useTradeStore((s) => s.accounts);
+  const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
   const currency = useSettings((s) => s.currency);
@@ -43,7 +44,7 @@ export default function NewTrade() {
     quantity: "1",
     fee: "0",
     status: "closed",
-    account: accounts[0]?.id ?? "",
+    account: activeAccountId || accounts[0]?.id || "",
     openDate: today(),
     closeDate: today(),
     notes: "",
