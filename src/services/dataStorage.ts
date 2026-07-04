@@ -234,8 +234,8 @@ export async function readDataFileText(name: string): Promise<string> {
 export async function exportAllToFile(): Promise<void> {
   const data = {
     exportedAt: new Date().toISOString(),
-    trades: JSON.parse(localStorage.getItem("tj-trade-store") ?? "{}"),
-    settings: JSON.parse(localStorage.getItem("tj-settings") ?? "{}"),
+    tradesStore: JSON.parse(localStorage.getItem("tj-trade-store") ?? "{}"),
+    settingsStore: JSON.parse(localStorage.getItem("tj-settings-store") ?? "{}"),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");

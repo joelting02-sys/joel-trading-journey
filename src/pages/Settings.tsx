@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
@@ -19,6 +19,7 @@ import {
   listDataFiles,
   readDataFileText,
   type DataLocation,
+  exportAllToFile,
 } from "@/services/dataStorage";
 import { triggerSupabaseSync, getSupabaseClient } from "@/services/supabaseService";
 
@@ -53,6 +54,11 @@ export default function Settings() {
   const [migrating, setMigrating] = useState(false);
   const [migrated, setMigrated] = useState(false);
   const [locationError, setLocationError] = useState("");
+  
+  // 备份导入状态
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState(false);
 
   // 文件夹浏览弹窗
   const [showFileBrowser, setShowFileBrowser] = useState(false);
@@ -227,6 +233,118 @@ export default function Settings() {
     )) return;
     await unbindDirectory();
     setDataLocation("none");
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportError("");
+    setImportSuccess(false);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) throw new Error(language === "zh" ? "读取文件失败" : "Failed to read file");
+
+        const parsed = JSON.parse(text);
+
+        let trades: any[] = [];
+        let accounts: any[] = [];
+        let sopRules: any[] = [];
+        let languageVal = language;
+        let currencyVal = currency;
+        let aiConfigsVal: any[] = [];
+        let activeAiConfigIdVal = "";
+        let calendarPrefsVal = null;
+        let calendarContentVal = "";
+        let preMarketChecksVal = [];
+        let positionCalcHistoryVal = [];
+
+        // Check new format (tradesStore) or old format (trades)
+        const tradesObj = parsed.tradesStore || parsed.trades;
+        if (tradesObj) {
+          const tState = tradesObj.state || tradesObj;
+          if (Array.isArray(tState.trades)) trades = tState.trades;
+          if (Array.isArray(tState.accounts)) accounts = tState.accounts;
+        }
+
+        // Check new format (settingsStore) or old format (settings)
+        const settingsObj = parsed.settingsStore || parsed.settings;
+        if (settingsObj) {
+          const sState = settingsObj.state || settingsObj;
+          if (Array.isArray(sState.sopRules)) sopRules = sState.sopRules;
+          if (sState.language) languageVal = sState.language;
+          if (sState.currency) currencyVal = sState.currency;
+          if (Array.isArray(sState.aiConfigs)) aiConfigsVal = sState.aiConfigs;
+          if (sState.activeAiConfigId) activeAiConfigIdVal = sState.activeAiConfigId;
+          if (sState.calendarPrefs) calendarPrefsVal = sState.calendarPrefs;
+          if (sState.calendarContent) calendarContentVal = sState.calendarContent;
+          if (Array.isArray(sState.preMarketChecks)) preMarketChecksVal = sState.preMarketChecks;
+          if (Array.isArray(sState.positionCalcHistory)) positionCalcHistoryVal = sState.positionCalcHistory;
+        }
+
+        if (trades.length === 0 && accounts.length === 0 && sopRules.length === 0) {
+          throw new Error(language === "zh" ? "无效的备份文件：未包含有效数据" : "Invalid backup file: contains no valid data");
+        }
+
+        // Update trade store state
+        useTradeStore.setState({
+          trades,
+          accounts,
+          activeAccountId: accounts[0]?.id || ""
+        });
+
+        // Update settings store state
+        useSettings.setState({
+          sopRules: sopRules.length > 0 ? sopRules : useSettings.getState().sopRules,
+          language: languageVal,
+          currency: currencyVal,
+          aiConfigs: aiConfigsVal,
+          activeAiConfigId: activeAiConfigIdVal,
+          calendarPrefs: calendarPrefsVal || useSettings.getState().calendarPrefs,
+          calendarContent: calendarContentVal,
+          preMarketChecks: preMarketChecksVal,
+          positionCalcHistory: positionCalcHistoryVal
+        });
+
+        // Force update timestamp for cloud sync
+        useSettings.getState().updateClientTimestamp();
+
+        setImportSuccess(true);
+        
+        // If logged in, trigger supabase sync immediately
+        const client = getSupabaseClient();
+        const sessionToken = useSettings.getState().supabaseSessionToken;
+        if (client && sessionToken) {
+          setSyncStatusMsg(language === "zh" ? "导入成功！正在同步至云端..." : "Import successful! Syncing to cloud...");
+          const res = await triggerSupabaseSync();
+          if (res.success) {
+            setSyncSuccess(true);
+            setSyncStatusMsg(language === "zh" ? "导入成功且云端同步完成！" : "Import successful and synced to cloud!");
+          } else {
+            setSyncError(res.error || "Cloud sync failed");
+          }
+        } else {
+          setSyncStatusMsg(language === "zh" ? "导入成功！(数据已保存在本地)" : "Import successful! (Data saved locally)");
+        }
+      } catch (err: any) {
+        setImportError(err.message || String(err));
+      } finally {
+        setImporting(false);
+        e.target.value = "";
+      }
+    };
+
+    reader.onerror = () => {
+      setImportError(language === "zh" ? "读取文件出错" : "Error reading file");
+      setImporting(false);
+      e.target.value = "";
+    };
+
+    reader.readAsText(file);
   }
 
   // 把当前 store 数据全量写一次到磁盘
@@ -462,87 +580,59 @@ export default function Settings() {
           />
         </SettingsSection>
 
-        {/* Local Data Storage */}
+        {/* Local Data Backup & Recovery */}
         <SettingsSection
           icon={<Database className="h-4 w-4" />}
-          title={language === "zh" ? "本地数据存储" : "Local Data Storage"}
+          title={language === "zh" ? "本地数据备份与恢复" : "Local Data Backup & Recovery"}
           description={
-            dataLocation === "filesystem"
-              ? (language === "zh" ? "数据已保存到本地 JSON 文件,清浏览器缓存也不会丢失。" : "Data is saved to local JSON files. Clearing browser cache will not lose data.")
-              : (language === "zh" ? "当前仅存在浏览器缓存中(有丢失风险),强烈建议选择文件夹迁移。" : "Currently only in browser cache (loss risk). Strongly recommend choosing a folder.")
+            language === "zh"
+              ? "您可以导出当前所有数据的 JSON 备份文件，或上传备份文件来恢复数据。上传的备份数据將自动同步至云端数据库。"
+              : "Export a JSON backup of all your data, or upload a backup file to restore your data. Restored data will sync to the cloud database automatically."
           }
         >
-          {locationError && (
+          {importError && (
             <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span>{locationError}</span>
+              <span>{importError}</span>
             </div>
           )}
-          {migrated && (
+          {importSuccess && (
             <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
               <FolderCheck className="h-3.5 w-3.5 shrink-0" />
-              <span>{language === "zh" ? "迁移完成,所有数据已写入 JSON 文件" : "Migration complete, all data written to JSON files"}</span>
-            </div>
-          )}
-          {!isFileSystemSupported() ? (
-            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
-              {language === "zh"
-                ? "当前浏览器不支持本地文件存储。请使用 Chrome / Edge 等基于 Chromium 的浏览器。"
-                : "Browser does not support local file storage. Please use Chrome / Edge."}
-            </div>
-          ) : dataLocation === "filesystem" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                <FolderCheck className="h-3.5 w-3.5" />
-                {language === "zh" ? "已绑定本地文件夹" : "Local folder bound"}
-              </span>
-              <button
-                type="button"
-                onClick={handleOpenFolder}
-                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
-              >
-                <FolderTree className="h-3.5 w-3.5" />
-                {language === "zh" ? "打开文件夹" : "Open Folder"}
-              </button>
-              <button
-                type="button"
-                onClick={migrateToDisk}
-                disabled={migrating}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-bg-hover disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${migrating ? "animate-spin" : ""}`} />
-                {language === "zh" ? "立即同步到磁盘" : "Sync to disk now"}
-              </button>
-              <button
-                type="button"
-                onClick={handleUnbind}
-                className="inline-flex items-center gap-1.5 rounded-md border border-loss/30 bg-bg-surface px-3 py-1.5 text-sm font-medium text-loss transition-colors hover:bg-loss/5"
-              >
-                {language === "zh" ? "解除绑定" : "Unbind"}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePickFolder}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
-              >
-                <FolderOpen className="h-4 w-4" />
-                {language === "zh" ? "选择数据保存文件夹" : "Choose data folder"}
-              </button>
-              <button
-                type="button"
-                onClick={handleReauth}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
-              >
-                {language === "zh" ? "重新授权已有文件夹" : "Re-authorize existing"}
-              </button>
-              <span className="text-[11px] text-text-muted">
-                {language === "zh" ? "推荐位置:文档 / Trading Journal / data" : "Suggested: Documents / Trading Journal / data"}
+              <span>
+                {language === "zh"
+                  ? "数据恢复成功！已更新本地状态。"
+                  : "Data restored successfully! Local state updated."}
               </span>
             </div>
           )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Upload Data Button */}
+            <label className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 cursor-pointer">
+              <Upload className="h-4 w-4" />
+              {importing
+                ? (language === "zh" ? "正在导入..." : "Importing...")
+                : (language === "zh" ? "上传备份数据" : "Upload Backup Data")}
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportFile}
+                disabled={importing}
+                className="hidden"
+              />
+            </label>
+
+            {/* Export Data Button */}
+            <button
+              type="button"
+              onClick={exportAllToFile}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+            >
+              <Download className="h-4 w-4" />
+              {language === "zh" ? "导出备份数据" : "Export Backup Data"}
+            </button>
+          </div>
         </SettingsSection>
 
         {/* Supabase Cloud Sync */}
