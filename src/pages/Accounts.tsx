@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Wallet, TrendingUp, TrendingDown, Check, Pencil, Trash2, Plus, X, ChevronDown, ChevronUp, AlertTriangle, Trophy, Target } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Check, Pencil, Trash2, Plus, X, ChevronDown, ChevronUp, AlertTriangle, Trophy, Target, Database } from "lucide-react";
 import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
@@ -50,6 +50,60 @@ export default function Accounts() {
     [accountEquities]
   );
 
+  const realEquity = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "real";
+      })
+      .reduce((s, { equity }) => s + equity, 0);
+  }, [accountEquities]);
+
+  const realPnl = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "real";
+      })
+      .reduce((s, { account, equity }) => s + (equity - account.balance), 0);
+  }, [accountEquities]);
+
+  const propEquity = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "prop";
+      })
+      .reduce((s, { equity }) => s + equity, 0);
+  }, [accountEquities]);
+
+  const propPnl = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "prop";
+      })
+      .reduce((s, { account, equity }) => s + (equity - account.balance), 0);
+  }, [accountEquities]);
+
+  const demoEquity = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "demo";
+      })
+      .reduce((s, { equity }) => s + equity, 0);
+  }, [accountEquities]);
+
+  const demoPnl = useMemo(() => {
+    return accountEquities
+      .filter(({ account }) => {
+        const type = account.accountType ?? (account.propFirm?.enabled ? "prop" : "real");
+        return type === "demo";
+      })
+      .reduce((s, { account, equity }) => s + (equity - account.balance), 0);
+  }, [accountEquities]);
+
   const openAdd = () => { setEditingAccount(null); setDialogOpen(true); };
   const openEdit = (a: Account) => { setEditingAccount(a); setDialogOpen(true); };
   const handleDelete = (a: Account) => { if (window.confirm(t.accountsPage.deleteConfirm)) deleteAccount(a.id); };
@@ -62,36 +116,69 @@ export default function Accounts() {
 
   return (
     <Layout title={t.title.accounts}>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-md border border-border bg-bg-surface px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/12">
-            <Wallet className="h-4 w-4 text-primary" />
+      <div className="mb-5 flex flex-col gap-4 rounded-md border border-border bg-bg-surface p-5">
+        {/* Three Columns Grid for Balances */}
+        <div className="grid grid-cols-1 gap-4 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          {/* Real Money */}
+          <div className="flex items-center gap-3 pb-3 sm:pb-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12">
+              <Wallet className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <div className="text-xs text-text-muted">{t.accountsPage.typeReal}</div>
+              <div className="tj-number text-lg font-semibold text-text">{formatCurrencyConverted(realEquity, currency)}</div>
+              <div className={`tj-number text-xs font-medium ${realPnl >= 0 ? "text-primary" : "text-loss"}`}>
+                {realPnl >= 0 ? "+" : ""}{formatSignedCurrencyConverted(realPnl, currency)}
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-text-muted">{t.accountsPage.totalEquity}</div>
-            <div className="tj-number text-lg font-semibold text-text">{formatCurrencyConverted(totalEquity, currency)}</div>
+
+          {/* Prop Firm */}
+          <div className="flex items-center gap-3 pt-3 sm:pl-4 sm:pt-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/12">
+              <Trophy className="h-4 w-4 text-warning" />
+            </div>
+            <div>
+              <div className="text-xs text-text-muted">{t.accountsPage.typeProp}</div>
+              <div className="tj-number text-lg font-semibold text-text">{formatCurrencyConverted(propEquity, currency)}</div>
+              <div className={`tj-number text-xs font-medium ${propPnl >= 0 ? "text-primary" : "text-loss"}`}>
+                {propPnl >= 0 ? "+" : ""}{formatSignedCurrencyConverted(propPnl, currency)}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {totalPnl >= 0 ? <TrendingUp className="h-4 w-4 text-primary" /> : <TrendingDown className="h-4 w-4 text-loss" />}
-          <div>
-            <div className="text-xs text-text-muted">{t.accountsPage.combinedPnl}</div>
-            <div className={`tj-number text-lg font-semibold ${totalPnl >= 0 ? "text-primary" : "text-loss"}`}>
-              {formatSignedCurrencyConverted(totalPnl, currency)}
+
+          {/* Demo */}
+          <div className="flex items-center gap-3 pt-3 sm:pl-4 sm:pt-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-info/12">
+              <Database className="h-4 w-4 text-info" />
+            </div>
+            <div>
+              <div className="text-xs text-text-muted">{t.accountsPage.typeDemo}</div>
+              <div className="tj-number text-lg font-semibold text-text">{formatCurrencyConverted(demoEquity, currency)}</div>
+              <div className={`tj-number text-xs font-medium ${demoPnl >= 0 ? "text-primary" : "text-loss"}`}>
+                {demoPnl >= 0 ? "+" : ""}{formatSignedCurrencyConverted(demoPnl, currency)}
+              </div>
             </div>
           </div>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
-          <div className="h-9 w-px bg-border" />
-          <div>
-            <div className="text-xs text-text-muted">{t.accountsPage.accounts}</div>
-            <div className="tj-number text-lg font-semibold text-text">{accounts.length}</div>
+
+        {/* Bottom bar with Add Account */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-text-muted">{t.accountsPage.accounts}:</div>
+              <div className="tj-number text-sm font-semibold text-text">{accounts.length}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-text-muted">{t.accountsPage.totalEquity}:</div>
+              <div className="tj-number text-sm font-semibold text-text">{formatCurrencyConverted(totalEquity, currency)}</div>
+            </div>
           </div>
+          <button type="button" onClick={openAdd} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90">
+            <Plus className="h-4 w-4" />
+            {t.accountsPage.addAccount}
+          </button>
         </div>
-        <button type="button" onClick={openAdd} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90">
-          <Plus className="h-4 w-4" />
-          {t.accountsPage.addAccount}
-        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
