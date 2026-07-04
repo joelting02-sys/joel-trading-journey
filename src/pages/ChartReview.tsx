@@ -69,6 +69,10 @@ export default function ChartReview() {
 
   // 标记模式
   const [markerMode, setMarkerMode] = useState<MarkerType | null>(null);
+  const markerModeRef = useRef<MarkerType | null>(null);
+  useEffect(() => {
+    markerModeRef.current = markerMode;
+  }, [markerMode]);
 
   // ========== 初始化图表 ==========
   useEffect(() => {
@@ -121,33 +125,34 @@ export default function ChartReview() {
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
 
-    // 点击事件 - 标记模式下添加标记
-    chart.subscribeClick((param) => {
-      if (!markerMode || !param.point) return;
+      // 点击事件 - 标记模式下添加标记
+      chart.subscribeClick((param) => {
+        const currentMode = markerModeRef.current;
+        if (!currentMode || !param.point) return;
 
-      const price = candleSeries.coordinateToPrice(param.point.y);
-      const time = param.time as UTCTimestamp;
+        const price = candleSeries.coordinateToPrice(param.point.y);
+        const time = param.time as UTCTimestamp;
 
-      if (price !== undefined && time !== undefined) {
-        const newMarker: ChartMarker = {
-          id: `marker_${Date.now()}`,
-          type: markerMode,
-          time: time as number,
-          price,
-        };
-        setMarkers((prev) => [...prev, newMarker]);
+        if (price !== undefined && time !== undefined) {
+          const newMarker: ChartMarker = {
+            id: `marker_${Date.now()}`,
+            type: currentMode,
+            time: time as number,
+            price,
+          };
+          setMarkers((prev) => [...prev, newMarker]);
 
-        // 自动填充价格到表单
-        if (markerMode === "entry_long" || markerMode === "entry_short") {
-          setFormEntryPrice(price.toFixed(4));
-          setFormDirection(markerMode === "entry_long" ? "long" : "short");
-        } else if (markerMode === "exit") {
-          setFormExitPrice(price.toFixed(4));
+          // 自动填充价格到表单
+          if (currentMode === "entry_long" || currentMode === "entry_short") {
+            setFormEntryPrice(price.toFixed(4));
+            setFormDirection(currentMode === "entry_long" ? "long" : "short");
+          } else if (currentMode === "exit") {
+            setFormExitPrice(price.toFixed(4));
+          }
+
+          // 退出标记模式
+          setMarkerMode(null);
         }
-
-        // 退出标记模式
-        setMarkerMode(null);
-      }
     });
 
     // 响应式
@@ -165,7 +170,7 @@ export default function ChartReview() {
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [markerMode]);
+  }, []);
 
   // ========== 更新标记 ==========
   useEffect(() => {
