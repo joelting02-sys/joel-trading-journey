@@ -61,7 +61,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });
-          // 启动时如果已登录，立即执行一次同步拉取最新云端数据
+          registerDevice(client).catch(() => {});
           triggerSupabaseSync().catch(() => {});
         }
       } catch {
@@ -75,7 +75,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });
-          // 登录或 Auth 状态变化时触发同步
+          registerDevice(client).catch(() => {});
           triggerSupabaseSync().catch(() => {});
         } else {
           useSettings.setState({
@@ -108,6 +108,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
           document.visibilityState === "visible"
         ) {
           triggerSupabaseSync().catch(() => {});
+          updateDeviceSeen(client).catch(() => {});
         }
       }, 30000);
     }
@@ -263,5 +264,131 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
           triggerSupabaseSync().catch(() => {});
           syncTimeoutId = null;
         }, 1500);
+      }
+    }
+
+    // ─── Device Tracking ───────────────────────────────────────────
+
+    const DEVICE_ID_KEY = "tj-device-id";
+    const DEVICE_SEEN_INTERVAL = 60_000;
+
+    export interface DeviceInfo {
+      id: string;
+      device_name: string;
+      browser: string;
+      os: string;
+      last_seen: string;
+      created_at: string;
+      isCurrent?: boolean;
+    }
+
+    function getDeviceId(): string {
+      let id = localStorage.getItem(DEVICE_ID_KEY);
+      if (!id) {
+        id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(DEVICE_ID_KEY, id);
+      }
+      return id;
+    }
+
+    function parseUserAgent(): { browser: string; os: string; deviceName: string } {
+      const ua = navigator.userAgent || "";
+      let browser = "Unknown";
+      if (ua.includes("Firefox/")) browser = "Firefox";
+      else if (ua.includes("Edg/")) browser = "Edge";
+      else if (ua.includes("Chrome/") && !ua.includes("Chromium")) browser = "Chrome";
+      else if (ua.includes("Safari/") && !ua.includes("Chrome")) browser = "Safari";
+      else if (ua.includes("Opera") || ua.includes("OPR")) browser = "Opera";
+
+      let os = "Unknown";
+      if (ua.includes("Windows NT 10")) os = "Windows 10/11";
+      else if (ua.includes("Windows")) os = "Windows";
+      else if (ua.includes("Mac OS X")) os = "macOS";
+      else if (ua.includes("Linux") && !ua.includes("Android")) os = "Linux";
+      else if (ua.includes("Android")) os = "Android";
+      else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+      const isMobile = /Android|iPhone|iPad|iPod/.test(ua);
+      const deviceName = isMobile ? `${os} Mobile` : `${os} Desktop`;
+
+      return { browser, os, deviceName };
+    }
+
+    let lastDeviceSeenAt = 0;
+
+    export async function registerDevice(client: SupabaseClient): Promise<void> {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+
+      const deviceId = getDeviceId();
+      const { browser, os, deviceName } = parseUserAgent();
+      const now = new Date().toISOString();
+
+      try {
+        await client.from("user_devices").upsert({
+          user_id: user.id,
+          device_id: deviceId,
+          device_name: deviceName,
+          browser,
+          os,
+          last_seen: now,
+        }, { onConflict: "user_id,device_id" });
+        lastDeviceSeenAt = Date.now();
+      } catch {
+        // silent
+      }
+    }
+
+    export async function updateDeviceSeen(client: SupabaseClient): Promise<void> {
+      if (Date.now() - lastDeviceSeenAt < DEVICE_SEEN_INTERVAL) return;
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+
+      const deviceId = getDeviceId();
+      try {
+        await client.from("user_devices").update({ last_seen: new Date().toISOString() })
+          .match({ user_id: user.id, device_id: deviceId });
+        lastDeviceSeenAt = Date.now();
+      } catch {
+        // silent
+      }
+    }
+
+    export async function removeCurrentDevice(client: SupabaseClient): Promise<void> {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+
+      const deviceId = getDeviceId();
+      try {
+        await client.from("user_devices").delete()
+          .match({ user_id: user.id, device_id: deviceId });
+      } catch {
+        // silent
+      }
+    }
+
+    export async function fetchDevices(client: SupabaseClient): Promise<DeviceInfo[]> {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return [];
+
+      try {
+        const { data, error } = await client.from("user_devices")
+          .select("id, device_id, device_name, browser, os, last_seen, created_at")
+          .eq("user_id", user.id)
+          .order("last_seen", { ascending: false });
+
+        if (error || !data) return [];
+        const currentDeviceId = getDeviceId();
+        return data.map((d: any) => ({
+          id: d.device_id,
+          device_name: d.device_name,
+          browser: d.browser,
+          os: d.os,
+          last_seen: d.last_seen,
+          created_at: d.created_at,
+          isCurrent: d.device_id === currentDeviceId,
+        }));
+      } catch {
+        return [];
       }
     }

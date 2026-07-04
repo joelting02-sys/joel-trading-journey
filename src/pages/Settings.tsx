@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight, Monitor } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
@@ -21,7 +21,7 @@ import {
   type DataLocation,
   exportAllToFile,
 } from "@/services/dataStorage";
-import { triggerSupabaseSync, getSupabaseClient } from "@/services/supabaseService";
+import { triggerSupabaseSync, getSupabaseClient, fetchDevices, removeCurrentDevice, type DeviceInfo } from "@/services/supabaseService";
 import { useDialogStore } from "@/store/useDialogStore";
 
 export default function Settings() {
@@ -80,6 +80,9 @@ export default function Settings() {
   const [showSupabasePassword, setShowSupabasePassword] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
 
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+
   async function handleCloudSync() {
     setSyncingCloud(true);
     setSyncError("");
@@ -131,7 +134,6 @@ export default function Settings() {
             supabaseUserEmail: data.user.email || "",
             supabaseSessionToken: data.session.access_token || ""
           });
-          // Wait a bit and trigger initial sync
           setTimeout(handleCloudSync, 200);
         }
       } else {
@@ -155,7 +157,8 @@ export default function Settings() {
     try {
       const client = getSupabaseClient();
       if (client) {
-        await client.auth.signOut();
+        await removeCurrentDevice(client);
+        await client.auth.signOut({ scope: "local" });
       }
     } catch (e) {
       // Ignore auth error on sign out
@@ -165,6 +168,7 @@ export default function Settings() {
         supabaseSessionToken: "",
         lastSyncedAt: 0
       });
+      setDevices([]);
       setEmail("");
       setPassword("");
     }
@@ -180,6 +184,39 @@ export default function Settings() {
       settings.setSupabaseAnonKey("sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO");
     }
   }, []);
+
+  useEffect(() => {
+    if (supabaseSessionToken) {
+      handleLoadDevices();
+    }
+  }, [supabaseSessionToken]);
+
+  async function handleLoadDevices() {
+    setLoadingDevices(true);
+    try {
+      const client = getSupabaseClient();
+      if (!client) return;
+      const list = await fetchDevices(client);
+      setDevices(list);
+    } catch {
+      // silent
+    } finally {
+      setLoadingDevices(false);
+    }
+  }
+
+  async function handleRemoveDevice(deviceId: string) {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+    try {
+      await client.from("user_devices").delete().match({ user_id: user.id, device_id: deviceId });
+      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
+    } catch {
+      // silent
+    }
+  }
 
 
 
@@ -753,6 +790,84 @@ export default function Settings() {
                     </div>
                   )}
                 </div>
+
+                {/* Device List */}
+                <div className="border-t border-border pt-3 mt-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-text-secondary">
+                      {language === "zh" ? "已登录设备" : "Active Devices"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleLoadDevices}
+                      disabled={loadingDevices}
+                      className="text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
+                    >
+                      {loadingDevices
+                        ? (language === "zh" ? "加载中..." : "Loading...")
+                        : (language === "zh" ? "刷新" : "Refresh")}
+                    </button>
+                  </div>
+                  {devices.length === 0 ? (
+                    <p className="text-xs text-text-muted py-2">
+                      {language === "zh" ? "暂无设备记录" : "No device records"}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {devices.map((device) => {
+                        const isCurrent = device.isCurrent;
+                        const timeAgo = getTimeAgo(device.last_seen, language);
+                        return (
+                          <div
+                            key={device.id}
+                            className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
+                              isCurrent
+                                ? "border-primary/30 bg-primary/5"
+                                : "border-border bg-bg-elevated"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Monitor className="h-4 w-4 shrink-0 text-text-muted" />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-text truncate">
+                                    {device.device_name}
+                                  </span>
+                                  {isCurrent && (
+                                    <span className="shrink-0 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                      {language === "zh" ? "当前设备" : "This device"}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-text-muted">
+                                  {device.browser} · {device.os} · {timeAgo}
+                                </span>
+                              </div>
+                            </div>
+                            {!isCurrent && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const ok = await useDialogStore.getState().confirm({
+                                    message: language === "zh"
+                                      ? `确定将此设备「${device.device_name}」退出登录？`
+                                      : `Remove this device "${device.device_name}" from active sessions?`,
+                                    variant: "warning",
+                                  });
+                                  if (ok) handleRemoveDevice(device.id);
+                                }}
+                                className="ml-2 shrink-0 rounded-sm p-1.5 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
+                                title={language === "zh" ? "移除此设备" : "Remove device"}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="rounded-md border border-border bg-bg-surface/50 p-4">
@@ -1180,6 +1295,24 @@ function AiConfigCard({
       </div>
     </div>
   );
+}
+
+function getTimeAgo(dateStr: string, language: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (language === "zh") {
+    if (seconds < 60) return "刚刚活跃";
+    if (minutes < 60) return `${minutes} 分钟前活跃`;
+    if (hours < 24) return `${hours} 小时前活跃`;
+    return `${days} 天前活跃`;
+  }
+  if (seconds < 60) return "Active just now";
+  if (minutes < 60) return `Active ${minutes}m ago`;
+  if (hours < 24) return `Active ${hours}h ago`;
+  return `Active ${days}d ago`;
 }
 
 // 经济日历偏好编辑器(国家/品种/重要性三维度勾选 + 两个开关)
