@@ -234,66 +234,100 @@ export default function Settings() {
 
         const parsed = JSON.parse(text);
 
-        let trades: any[] = [];
-        let accounts: any[] = [];
-        let sopRules: any[] = [];
-        let languageVal = language;
-        let currencyVal = currency;
-        let aiConfigsVal: any[] = [];
-        let activeAiConfigIdVal = "";
-        let calendarPrefsVal = null;
-        let calendarContentVal = "";
-        let preMarketChecksVal = [];
-        let positionCalcHistoryVal = [];
+        // 定义待应用的 Store 状态
+        let tradesToSet: any[] | null = null;
+        let accountsToSet: any[] | null = null;
+        let settingsToSet: any = null;
+        let sopRulesToSet: any[] | null = null;
 
-        // Check new format (tradesStore) or old format (trades)
-        const tradesObj = parsed.tradesStore || parsed.trades;
-        if (tradesObj) {
-          const tState = tradesObj.state || tradesObj;
-          if (Array.isArray(tState.trades)) trades = tState.trades;
-          if (Array.isArray(tState.accounts)) accounts = tState.accounts;
+        // 1) 检测合并备份格式 (即由「导出备份数据」生成的包含 tradesStore 或 settingsStore 的 JSON)
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed.tradesStore || parsed.settingsStore || parsed.trades || parsed.settings)) {
+          const tradesObj = parsed.tradesStore || parsed.trades;
+          if (tradesObj) {
+            const tState = tradesObj.state || tradesObj;
+            if (Array.isArray(tState.trades)) tradesToSet = tState.trades;
+            if (Array.isArray(tState.accounts)) accountsToSet = tState.accounts;
+          }
+          const settingsObj = parsed.settingsStore || parsed.settings;
+          if (settingsObj) {
+            const sState = settingsObj.state || settingsObj;
+            settingsToSet = sState;
+            if (Array.isArray(sState.sopRules)) sopRulesToSet = sState.sopRules;
+          }
+        }
+        // 2) 检测单个 Array 结构文件 (如 trades.json, accounts.json, sop.json)
+        else if (Array.isArray(parsed)) {
+          if (parsed.length === 0) {
+            throw new Error(language === "zh" ? "上传的 JSON 数组为空，无法判断数据类型" : "Uploaded JSON array is empty, cannot determine type");
+          }
+          const firstItem = parsed[0];
+          if (firstItem && typeof firstItem === "object") {
+            if ("symbol" in firstItem && "entryPrice" in firstItem) {
+              tradesToSet = parsed; // trades.json
+            } else if ("balance" in firstItem && "equity" in firstItem) {
+              accountsToSet = parsed; // accounts.json
+            } else if ("category" in firstItem && "title" in firstItem) {
+              sopRulesToSet = parsed; // sop.json
+            } else {
+              throw new Error(language === "zh" ? "无法识别的 JSON 数组结构" : "Unrecognized JSON array structure");
+            }
+          } else {
+            throw new Error(language === "zh" ? "无效的 JSON 数组类型" : "Invalid JSON array type");
+          }
+        }
+        // 3) 检测单个 Object 结构文件 (如 settings.json)
+        else if (parsed && typeof parsed === "object") {
+          if ("aiConfigs" in parsed || "language" in parsed || "currency" in parsed) {
+            settingsToSet = parsed; // settings.json
+            if (Array.isArray(parsed.sopRules)) {
+              sopRulesToSet = parsed.sopRules;
+            }
+          } else {
+            throw new Error(language === "zh" ? "无法识别的 JSON 对象结构" : "Unrecognized JSON object structure");
+          }
+        } else {
+          throw new Error(language === "zh" ? "无效的 JSON 数据" : "Invalid JSON data");
         }
 
-        // Check new format (settingsStore) or old format (settings)
-        const settingsObj = parsed.settingsStore || parsed.settings;
-        if (settingsObj) {
-          const sState = settingsObj.state || settingsObj;
-          if (Array.isArray(sState.sopRules)) sopRules = sState.sopRules;
-          if (sState.language) languageVal = sState.language;
-          if (sState.currency) currencyVal = sState.currency;
-          if (Array.isArray(sState.aiConfigs)) aiConfigsVal = sState.aiConfigs;
-          if (sState.activeAiConfigId) activeAiConfigIdVal = sState.activeAiConfigId;
-          if (sState.calendarPrefs) calendarPrefsVal = sState.calendarPrefs;
-          if (sState.calendarContent) calendarContentVal = sState.calendarContent;
-          if (Array.isArray(sState.preMarketChecks)) preMarketChecksVal = sState.preMarketChecks;
-          if (Array.isArray(sState.positionCalcHistory)) positionCalcHistoryVal = sState.positionCalcHistory;
+        // 应用解析出的数据到相应 Zustand 仓库
+        let updatedAny = false;
+
+        if (tradesToSet !== null) {
+          useTradeStore.setState({ trades: tradesToSet });
+          updatedAny = true;
+        }
+        if (accountsToSet !== null) {
+          useTradeStore.setState({ 
+            accounts: accountsToSet,
+            activeAccountId: accountsToSet[0]?.id || ""
+          });
+          updatedAny = true;
+        }
+        if (sopRulesToSet !== null) {
+          useSettings.setState({ sopRules: sopRulesToSet });
+          updatedAny = true;
+        }
+        if (settingsToSet !== null) {
+          const s = settingsToSet;
+          const currentSettings = useSettings.getState();
+          useSettings.setState({
+            language: s.language || currentSettings.language,
+            currency: s.currency || currentSettings.currency,
+            aiConfigs: Array.isArray(s.aiConfigs) ? s.aiConfigs : currentSettings.aiConfigs,
+            activeAiConfigId: s.activeAiConfigId || currentSettings.activeAiConfigId,
+            calendarPrefs: s.calendarPrefs || currentSettings.calendarPrefs,
+            calendarContent: s.calendarContent !== undefined ? s.calendarContent : currentSettings.calendarContent,
+            preMarketChecks: Array.isArray(s.preMarketChecks) ? s.preMarketChecks : currentSettings.preMarketChecks,
+            positionCalcHistory: Array.isArray(s.positionCalcHistory) ? s.positionCalcHistory : currentSettings.positionCalcHistory,
+          });
+          updatedAny = true;
         }
 
-        if (trades.length === 0 && accounts.length === 0 && sopRules.length === 0) {
-          throw new Error(language === "zh" ? "无效的备份文件：未包含有效数据" : "Invalid backup file: contains no valid data");
+        if (!updatedAny) {
+          throw new Error(language === "zh" ? "未检测到可导入的有效数据" : "No valid data detected to import");
         }
 
-        // Update trade store state
-        useTradeStore.setState({
-          trades,
-          accounts,
-          activeAccountId: accounts[0]?.id || ""
-        });
-
-        // Update settings store state
-        useSettings.setState({
-          sopRules: sopRules.length > 0 ? sopRules : useSettings.getState().sopRules,
-          language: languageVal,
-          currency: currencyVal,
-          aiConfigs: aiConfigsVal,
-          activeAiConfigId: activeAiConfigIdVal,
-          calendarPrefs: calendarPrefsVal || useSettings.getState().calendarPrefs,
-          calendarContent: calendarContentVal,
-          preMarketChecks: preMarketChecksVal,
-          positionCalcHistory: positionCalcHistoryVal
-        });
-
-        // Force update timestamp for cloud sync
+        // 强制更新时间戳以触发云端同步
         useSettings.getState().updateClientTimestamp();
 
         setImportSuccess(true);
