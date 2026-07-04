@@ -1,145 +1,39 @@
-import { useEffect, useRef, useState, useMemo } from "react";
-import {
-  createChart,
-  IChartApi,
-  ISeriesApi,
-  CandlestickSeries,
-  UTCTimestamp,
-  createSeriesMarkers,
-  LineStyle,
-} from "lightweight-charts";
-import {
-  TrendingUp, TrendingDown, Plus, Trash2, Save, X,
-  BarChart3, Wallet, Calendar, Target, DollarSign,
-  MousePointer2, AlertTriangle, Minus,
-} from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Plus, Save, X, BarChart3, Wallet } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
 import { useTradeStore } from "@/store/useTradeStore";
 import { instrumentCategories } from "@/data/instruments";
-import { fetchYahooCandles, type YahooCandle, type YahooInterval, type YahooRange } from "@/services/yahooFinance";
 import type { Direction, Trade } from "@/types";
 
-// ========== 颜色配置 ==========
-const PRIMARY = "#099268";
-const LOSS = "#e03131";
-const CHART_BG = "transparent";
-const GRID_COLOR = "rgba(0,0,0,0.04)";
-const TEXT_COLOR = "#868e96";
-
-// 标记类型
-type MarkerType = "entry_long" | "entry_short" | "exit" | "stoploss" | "takeprofit" | "horizontal_line";
-
-interface ChartMarker {
-  id: string;
-  type: MarkerType;
-  time: number;
-  price: number;
-}
-
-// 模拟 K 线数据生成器，用于网络连接失败时（例如中国大陆网络直接访问 Yahoo API 受限）的降级体验
-function generateMockCandles(symbol: string, interval: YahooInterval, range: YahooRange): YahooCandle[] {
-  const candles: YahooCandle[] = [];
-  const now = new Date();
+function toTvSymbol(symbol: string): string {
+  const s = symbol.toUpperCase().replace("/", "");
+  if (s === "COPPER") return "COMEX:HG1!";
+  if (s === "US500") return "FOREXCOM:SPX500";
+  if (s === "US30") return "FOREXCOM:US30";
+  if (s.includes("XAUUSD")) return "OANDA:XAUUSD";
+  if (s.includes("XAGUSD")) return "OANDA:XAGUSD";
   
-  let daysLimit = 180;
-  if (range === "1mo") daysLimit = 30;
-  else if (range === "3mo") daysLimit = 90;
-  else if (range === "6mo") daysLimit = 180;
-  else if (range === "1y") daysLimit = 365;
-  else if (range === "2y") daysLimit = 730;
-  else if (range === "5y") daysLimit = 1825;
-  
-  let stepSeconds = 24 * 60 * 60; // 1d
-  if (interval === "1wk") stepSeconds = 7 * 24 * 60 * 60;
-  else if (interval === "1mo") stepSeconds = 30 * 24 * 60 * 60;
-  
-  const count = Math.ceil(daysLimit / (stepSeconds / (24 * 60 * 60)));
-  
-  let price = 100.0;
-  let volatility = 1.0;
-  
-  const s = symbol.toUpperCase();
-  if (s.includes("JPY")) {
-    price = 155.0;
-    volatility = 0.8;
-  } else if (s.includes("EUR") || s.includes("GBP") || s.includes("AUD") || s.includes("CAD")) {
-    price = 1.1200;
-    volatility = 0.005;
-  } else if (s.includes("XAU")) {
-    price = 2350.0;
-    volatility = 15.0;
-  } else if (s.includes("XAG")) {
-    price = 29.5;
-    volatility = 0.2;
-  } else if (s.includes("US500")) {
-    price = 5200.0;
-    volatility = 30.0;
-  } else if (s.includes("US30")) {
-    price = 39000.0;
-    volatility = 200.0;
+  // For FX pairs
+  const fxPairs = ["EURUSD", "AUDUSD", "GBPUSD", "USDJPY", "USDCAD"];
+  if (fxPairs.includes(s)) {
+    return `FX_IDC:${s}`;
   }
-  
-  let startTimestamp = Math.floor(now.getTime() / 1000) - count * stepSeconds;
-  
-  for (let i = 0; i < count; i++) {
-    const t = startTimestamp + i * stepSeconds;
-    
-    if (interval === "1d") {
-      const date = new Date(t * 1000);
-      const day = date.getDay();
-      if (day === 0 || day === 6) continue;
-    }
-    
-    const change = (Math.random() - 0.5) * volatility * 1.5;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-    
-    candles.push({
-      time: t,
-      open,
-      high,
-      low,
-      close,
-      volume: Math.floor(Math.random() * 1000000),
-    });
-    
-    price = close;
-  }
-  
-  return candles;
+  return s;
 }
 
 export default function ChartReview() {
-  const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
   const currency = useSettings((s) => s.currency);
 
   const accounts = useTradeStore((s) => s.accounts);
   const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const addTrade = useTradeStore((s) => s.addTrade);
-  const trades = useTradeStore((s) => s.trades);
-
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const markersApiRef = useRef<any>(null);
 
   // 状态
   const [selectedSymbol, setSelectedSymbol] = useState("EUR/USD");
-  const [interval, setInterval] = useState<YahooInterval>("1d");
-  const [range, setRange] = useState<YahooRange>("6mo");
+  const [interval, setInterval] = useState("D"); // '1', '5', '15', '60', '240', 'D', 'W', 'M'
   const [selectedAccountId, setSelectedAccountId] = useState(activeAccountId);
-  const [candles, setCandles] = useState<YahooCandle[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [markers, setMarkers] = useState<ChartMarker[]>([]);
-  const [isMockData, setIsMockData] = useState(false);
-
-  // 自定义水平支撑/阻力线
-  const [customLines, setCustomLines] = useState<Array<{ id: string; price: number; color: string; label: string }>>([]);
-  const priceLinesRef = useRef<Map<string, any>>(new Map());
 
   // 交易表单状态
   const [showForm, setShowForm] = useState(false);
@@ -150,265 +44,57 @@ export default function ChartReview() {
   const [formNotes, setFormNotes] = useState("");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
 
-  // 标记模式
-  const [markerMode, setMarkerMode] = useState<MarkerType | null>(null);
-  const markerModeRef = useRef<MarkerType | null>(null);
+  // TradingView 脚本加载状态
+  const [tvLoaded, setTvLoaded] = useState(false);
+
+  // 动态加载 TradingView 脚本
   useEffect(() => {
-    markerModeRef.current = markerMode;
-  }, [markerMode]);
-
-  // ========== 初始化图表 ==========
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: CHART_BG },
-        textColor: TEXT_COLOR,
-        fontFamily: "'JetBrains Mono', monospace",
-      },
-      grid: {
-        vertLines: { color: GRID_COLOR },
-        horzLines: { color: GRID_COLOR },
-      },
-      rightPriceScale: {
-        borderColor: "transparent",
-      },
-      timeScale: {
-        borderColor: "transparent",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      crosshair: {
-        mode: 1,
-        vertLine: {
-          color: "rgba(134, 142, 150, 0.3)",
-          width: 1,
-          style: 2,
-        },
-        horzLine: {
-          color: "rgba(134, 142, 150, 0.3)",
-          width: 1,
-          style: 2,
-        },
-      },
-      handleScroll: true,
-      handleScale: true,
-    });
-
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: PRIMARY,
-      downColor: LOSS,
-      borderUpColor: PRIMARY,
-      borderDownColor: LOSS,
-      wickUpColor: PRIMARY,
-      wickDownColor: LOSS,
-    });
-
-    chartRef.current = chart;
-    candleSeriesRef.current = candleSeries;
-    markersApiRef.current = createSeriesMarkers(candleSeries, []);
-
-      // 点击事件 - 标记模式下添加标记
-      chart.subscribeClick((param) => {
-        const currentMode = markerModeRef.current;
-        if (!currentMode || !param.point) return;
-
-        const price = candleSeries.coordinateToPrice(param.point.y);
-        const time = param.time as UTCTimestamp;
-
-        if (price !== undefined) {
-          if (currentMode === "horizontal_line") {
-            const newLine = {
-              id: `line_${Date.now()}`,
-              price,
-              color: "#228be6", // 蓝色支撑阻力线
-              label: `L: ${price.toFixed(4)}`,
-            };
-            setCustomLines((prev) => [...prev, newLine]);
-            setMarkerMode(null);
-            return;
-          }
-
-          if (time !== undefined) {
-            const newMarker: ChartMarker = {
-              id: `marker_${Date.now()}`,
-              type: currentMode as MarkerType,
-              time: time as number,
-              price,
-            };
-            setMarkers((prev) => [...prev, newMarker]);
-
-            // 自动填充价格到表单
-            if (currentMode === "entry_long" || currentMode === "entry_short") {
-              setFormEntryPrice(price.toFixed(4));
-              setFormDirection(currentMode === "entry_long" ? "long" : "short");
-            } else if (currentMode === "exit") {
-              setFormExitPrice(price.toFixed(4));
-            }
-
-            // 退出标记模式
-            setMarkerMode(null);
-          }
-        }
-    });
-
-    // 响应式
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
-      }
+    if ((window as any).TradingView) {
+      setTvLoaded(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/tv.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.id = "tradingview-widget-script";
+    script.onload = () => {
+      setTvLoaded(true);
     };
-    window.addEventListener("resize", handleResize);
-    handleResize();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chart.remove();
-      markersApiRef.current = null;
-      priceLinesRef.current.clear();
-    };
+    document.head.appendChild(script);
   }, []);
 
-  // ========== 更新标记 ==========
+  // 初始化 & 联动更新 TradingView Widget
   useEffect(() => {
-    if (!markersApiRef.current) return;
+    if (!tvLoaded || !(window as any).TradingView) return;
 
-    const tvMarkers = markers.map((m) => {
-      let color = PRIMARY;
-      let shape: "arrowUp" | "arrowDown" | "circle" | "square" = "arrowUp";
-      let position: "aboveBar" | "belowBar" | "inBar" = "belowBar";
-      let text = "";
+    const container = document.getElementById("tradingview_chart_container");
+    if (!container) return;
+    container.innerHTML = "";
 
-      switch (m.type) {
-        case "entry_long":
-          color = PRIMARY;
-          shape = "arrowUp";
-          position = "belowBar";
-          text = "ENTRY";
-          break;
-        case "entry_short":
-          color = LOSS;
-          shape = "arrowDown";
-          position = "aboveBar";
-          text = "ENTRY";
-          break;
-        case "exit":
-          color = "#f59f00";
-          shape = "circle";
-          position = "inBar";
-          text = "EXIT";
-          break;
-        case "stoploss":
-          color = LOSS;
-          shape = "square";
-          position = "belowBar";
-          text = "SL";
-          break;
-        case "takeprofit":
-          color = PRIMARY;
-          shape = "square";
-          position = "aboveBar";
-          text = "TP";
-          break;
-      }
+    const tvSymbol = toTvSymbol(selectedSymbol);
 
-      return {
-        time: m.time as UTCTimestamp,
-        position,
-        color,
-        shape,
-        text,
-        size: 2,
-      };
+    new (window as any).TradingView.widget({
+      "autosize": true,
+      "symbol": tvSymbol,
+      "interval": interval,
+      "timezone": "Etc/UTC",
+      "theme": "light", // 浅色主题以契合系统整体风格
+      "style": "1", // 1 = 蜡烛图
+      "locale": language === "zh" ? "zh_CN" : "en",
+      "enable_publishing": false,
+      "hide_side_toolbar": false, // 显示左侧绘图工具栏
+      "allow_symbol_change": true,
+      "container_id": "tradingview_chart_container",
+      "studies": [
+        "RSI@tv-basicstudies",
+        "MASimple@tv-basicstudies"
+      ],
+      "show_popup_button": true,
+      "popup_width": "1000",
+      "popup_height": "650",
     });
-
-    markersApiRef.current.setMarkers(tvMarkers);
-  }, [markers]);
-
-  // ========== 同步自定义水平线 ==========
-  useEffect(() => {
-    if (!candleSeriesRef.current) return;
-    const series = candleSeriesRef.current;
-
-    // 先清空所有旧的线（重新加载数据或切换品种时）
-    for (const lineObj of priceLinesRef.current.values()) {
-      try {
-        series.removePriceLine(lineObj);
-      } catch {}
-    }
-    priceLinesRef.current.clear();
-
-    // 重新创建所有水平线
-    customLines.forEach((l) => {
-      const lineObj = series.createPriceLine({
-        price: l.price,
-        color: l.color,
-        lineWidth: 2,
-        lineStyle: LineStyle.Solid,
-        axisLabelVisible: true,
-        title: l.label,
-      });
-      priceLinesRef.current.set(l.id, lineObj);
-    });
-  }, [customLines, candles]);
-
-  // ========== 获取K线数据 ==========
-  const fetchData = async () => {
-    setLoading(true);
-    setIsMockData(false);
-    try {
-      const symbol = selectedSymbol.replace("/", "");
-      let { candles: data } = await fetchYahooCandles(symbol, interval, range);
-      
-      if (data.length === 0) {
-        // 如果拉取失败，则自动加载模拟数据，避免白屏
-        data = generateMockCandles(selectedSymbol, interval, range);
-        setIsMockData(true);
-      }
-      
-      setCandles(data);
-      setMarkers([]); // 切换品种时清空标记
-
-      if (candleSeriesRef.current && data.length > 0) {
-        const candleData = data.map((c) => ({
-          time: c.time as UTCTimestamp,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        }));
-        candleSeriesRef.current.setData(candleData);
-        chartRef.current?.timeScale().fitContent();
-      }
-    } catch (err) {
-      console.error("Failed to fetch candles:", err);
-      // 发生异常时也降级到模拟数据，确保界面可用
-      const fallbackData = generateMockCandles(selectedSymbol, interval, range);
-      setCandles(fallbackData);
-      setIsMockData(true);
-      if (candleSeriesRef.current && fallbackData.length > 0) {
-        const candleData = fallbackData.map((c) => ({
-          time: c.time as UTCTimestamp,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        }));
-        candleSeriesRef.current.setData(candleData);
-        chartRef.current?.timeScale().fitContent();
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 初始加载
-  useEffect(() => {
-    fetchData();
-  }, [selectedSymbol, interval, range]);
+  }, [tvLoaded, selectedSymbol, interval, language]);
 
   // ========== 保存交易记录 ==========
   const handleSaveTrade = () => {
@@ -453,17 +139,6 @@ export default function ChartReview() {
     setFormExitPrice("");
     setFormQuantity("1");
     setFormNotes("");
-    setMarkers([]);
-  };
-
-  // ========== 删除标记 ==========
-  const removeMarker = (id: string) => {
-    setMarkers((prev) => prev.filter((m) => m.id !== id));
-  };
-
-  // ========== 清空所有标记 ==========
-  const clearMarkers = () => {
-    setMarkers([]);
   };
 
   // 品种选项
@@ -477,27 +152,17 @@ export default function ChartReview() {
     );
   }, [language]);
 
-  // 时间周期选项
-  const intervalOptions: Array<{ value: YahooInterval; label: string }> = [
-    { value: "1d", label: language === "zh" ? "日线" : "Daily" },
-    { value: "1wk", label: language === "zh" ? "周线" : "Weekly" },
-    { value: "1mo", label: language === "zh" ? "月线" : "Monthly" },
+  // 时间周期选项（TradingView 对应值）
+  const intervalOptions = [
+    { value: "1", label: language === "zh" ? "1分钟" : "1m" },
+    { value: "5", label: language === "zh" ? "5分钟" : "5m" },
+    { value: "15", label: language === "zh" ? "15分钟" : "15m" },
+    { value: "60", label: language === "zh" ? "1小时" : "1H" },
+    { value: "240", label: language === "zh" ? "4小时" : "4H" },
+    { value: "D", label: language === "zh" ? "日线" : "Daily" },
+    { value: "W", label: language === "zh" ? "周线" : "Weekly" },
+    { value: "M", label: language === "zh" ? "月线" : "Monthly" },
   ];
-
-  // 时间范围选项
-  const rangeOptions: Array<{ value: YahooRange; label: string }> = [
-    { value: "1mo", label: language === "zh" ? "1个月" : "1 Month" },
-    { value: "3mo", label: language === "zh" ? "3个月" : "3 Months" },
-    { value: "6mo", label: language === "zh" ? "6个月" : "6 Months" },
-    { value: "1y", label: language === "zh" ? "1年" : "1 Year" },
-    { value: "2y", label: language === "zh" ? "2年" : "2 Years" },
-    { value: "5y", label: language === "zh" ? "5年" : "5 Years" },
-  ];
-
-  // 当前账户的交易记录
-  const accountTrades = useMemo(() => {
-    return trades.filter((t) => t.account === selectedAccountId).slice(0, 20);
-  }, [trades, selectedAccountId]);
 
   // 格式化货币
   const formatCurrency = (value: number) => {
@@ -537,7 +202,7 @@ export default function ChartReview() {
           </label>
           <select
             value={interval}
-            onChange={(e) => setInterval(e.target.value as YahooInterval)}
+            onChange={(e) => setInterval(e.target.value)}
             className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
           >
             {intervalOptions.map((opt) => (
@@ -546,51 +211,6 @@ export default function ChartReview() {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* 时间范围 */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-text-muted">
-            {language === "zh" ? "范围" : "Range"}
-          </label>
-          <select
-            value={range}
-            onChange={(e) => setRange(e.target.value as YahooRange)}
-            className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
-          >
-            {rangeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="h-8 w-px bg-border" />
-
-        {/* 跳转到日期 */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-text-muted">
-            {language === "zh" ? "跳转到日期" : "Go to Date"}
-          </label>
-          <input
-            type="date"
-            onChange={(e) => {
-              const dateVal = e.target.value;
-              if (!dateVal) return;
-              const dateObj = new Date(dateVal);
-              const unixTime = Math.floor(dateObj.getTime() / 1000);
-              
-              if (chartRef.current) {
-                const thirtyDays = 30 * 24 * 60 * 60;
-                chartRef.current.timeScale().setVisibleRange({
-                  from: (unixTime - thirtyDays) as UTCTimestamp,
-                  to: (unixTime + thirtyDays) as UTCTimestamp,
-                });
-              }
-            }}
-            className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
-          />
         </div>
 
         <div className="h-8 w-px bg-border" />
@@ -619,205 +239,46 @@ export default function ChartReview() {
 
         <div className="ml-auto flex gap-2">
           <button
-            onClick={() => setCustomLines([])}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover"
-          >
-            <Minus size={16} />
-            {language === "zh" ? "清空水平线" : "Clear Lines"}
-          </button>
-          <button
-            onClick={clearMarkers}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover"
-          >
-            <Trash2 size={16} />
-            {language === "zh" ? "清空标记" : "Clear Markers"}
-          </button>
-          <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
             <Plus size={16} />
-            {language === "zh" ? "添加交易" : "Add Trade"}
+            {language === "zh" ? "记录复盘交易" : "Log Trade"}
           </button>
         </div>
       </div>
 
-      {/* 标记工具栏 */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-text-muted">
-          {language === "zh" ? "标记工具：" : "Markers: "}
-        </span>
-        <button
-          onClick={() => setMarkerMode(markerMode === "entry_long" ? null : "entry_long")}
-          className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-            markerMode === "entry_long"
-              ? "bg-primary text-white"
-              : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-          }`}
-        >
-          <TrendingUp size={14} />
-          {language === "zh" ? "做多入场" : "Long Entry"}
-        </button>
-        <button
-          onClick={() => setMarkerMode(markerMode === "entry_short" ? null : "entry_short")}
-          className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-            markerMode === "entry_short"
-              ? "bg-loss text-white"
-              : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-          }`}
-        >
-          <TrendingDown size={14} />
-          {language === "zh" ? "做空入场" : "Short Entry"}
-        </button>
-        <button
-          onClick={() => setMarkerMode(markerMode === "exit" ? null : "exit")}
-          className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-            markerMode === "exit"
-              ? "bg-warning text-white"
-              : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-          }`}
-        >
-          <Target size={14} />
-          {language === "zh" ? "出场" : "Exit"}
-        </button>
-        <button
-          onClick={() => setMarkerMode(markerMode === "horizontal_line" ? null : "horizontal_line")}
-          className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-            markerMode === "horizontal_line"
-              ? "bg-blue-500 text-white"
-              : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-          }`}
-        >
-          <Minus size={14} />
-          {language === "zh" ? "水平线" : "Horizontal Line"}
-        </button>
-        {markerMode && (
-          <span className="ml-2 flex items-center gap-1 text-xs text-primary">
-            <MousePointer2 size={12} />
-            {markerMode === "horizontal_line"
-              ? language === "zh" ? "点击图表位置添加水平支撑/阻力线" : "Click on chart to place horizontal line"
-              : language === "zh" ? "点击图表添加标记" : "Click on chart to place marker"}
-          </span>
-        )}
-      </div>
-
-      {isMockData && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-warning/20 bg-warning/10 p-3.5 text-xs text-text-secondary">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
-          <span>
-            {language === "zh"
-              ? "获取历史 K 线数据失败（通常因中国大陆网络无法直接访问 Yahoo Finance），已为您自动生成并加载本地模拟 K 线数据以供 SOP 模拟复盘。"
-              : "Failed to retrieve live market data (usually due to connection blockages). Simulated mock candles have been generated for your SOP review."}
-          </span>
-        </div>
-      )}
-
       {/* 图表区域 */}
-      <div className="mb-4 overflow-hidden rounded-xl border border-border bg-bg-surface">
+      <div className="mb-4 overflow-hidden rounded-xl border border-border bg-bg-surface shadow-sm">
         <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
               <BarChart3 className="h-3.5 w-3.5 text-primary" />
             </div>
             <span className="font-display text-sm font-semibold text-text">
-              {selectedSymbol} · {intervalOptions.find((i) => i.value === interval)?.label}
+              TradingView {language === "zh" ? "专业图表画布" : "Chart Canvas"} ({selectedSymbol})
             </span>
-            {loading && (
-              <span className="ml-2 text-xs text-text-muted">
-                {language === "zh" ? "加载中..." : "Loading..."}
-              </span>
-            )}
           </div>
-          {markers.length > 0 && (
-            <span className="text-xs text-text-muted">
-              {markers.length} {language === "zh" ? "个标记" : "markers"}
-            </span>
+        </div>
+        <div className="relative min-h-[580px] w-full bg-slate-50">
+          <div id="tradingview_chart_container" className="h-[580px] w-full" />
+          {!tvLoaded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 text-text-secondary">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-3" />
+              <p className="text-xs">{language === "zh" ? "正在连接 TradingView 服务器..." : "Connecting TradingView..."}</p>
+            </div>
           )}
         </div>
-        <div ref={chartContainerRef} className="h-[450px] w-full cursor-crosshair" />
       </div>
-
-      {/* 标记列表 */}
-      {markers.length > 0 && (
-        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">
-              {language === "zh" ? "图表标记" : "Chart Markers"}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {markers.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-xs"
-              >
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    m.type === "entry_long"
-                      ? "bg-primary"
-                      : m.type === "entry_short"
-                      ? "bg-loss"
-                      : "bg-warning"
-                  }`}
-                />
-                <span className="font-medium text-text-secondary">
-                  {m.type === "entry_long"
-                    ? language === "zh" ? "做多入场" : "Long Entry"
-                    : m.type === "entry_short"
-                    ? language === "zh" ? "做空入场" : "Short Entry"
-                    : language === "zh" ? "出场" : "Exit"}
-                </span>
-                <span className="tj-number font-mono text-text">{m.price.toFixed(4)}</span>
-                <button
-                  onClick={() => removeMarker(m.id)}
-                  className="text-text-muted hover:text-loss"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 水平线列表 */}
-      {customLines.length > 0 && (
-        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Minus className="h-4 w-4 text-blue-500" />
-            <span className="font-display text-sm font-semibold text-text">
-              {language === "zh" ? "图表水平线 (支撑/阻力)" : "Chart Horizontal Lines (Support/Resistance)"}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {customLines.map((l) => (
-              <div
-                key={l.id}
-                className="flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-xs"
-              >
-                <span className="inline-block h-1 w-3 bg-blue-500 rounded-sm" />
-                <span className="tj-number font-mono text-text">{l.price.toFixed(4)}</span>
-                <button
-                  onClick={() => setCustomLines((prev) => prev.filter((item) => item.id !== l.id))}
-                  className="text-text-muted hover:text-loss"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 添加交易表单 */}
       {showForm && (
-        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-5">
+        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
               <span className="font-display text-sm font-semibold text-text">
-                {language === "zh" ? "添加交易记录" : "Add Trade Record"}
+                {language === "zh" ? "记录复盘交易" : "Log Review Trade"}
               </span>
             </div>
             <button
@@ -978,7 +439,6 @@ export default function ChartReview() {
           </div>
         </div>
       )}
-
     </Layout>
   );
 }
