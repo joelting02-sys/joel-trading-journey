@@ -57,6 +57,15 @@ export default defineConfig({
   build: {
     sourcemap: 'hidden',
   },
+  server: {
+    proxy: {
+      '/api/supabase': {
+        target: 'https://imemwbgtxnkfodncfgal.supabase.co',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/supabase/, ''),
+      }
+    }
+  },
   plugins: [
     react({
       babel: {

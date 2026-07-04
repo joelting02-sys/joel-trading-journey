@@ -26,7 +26,13 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       try {
         cachedUrl = supabaseUrl;
         cachedKey = supabaseAnonKey;
-        cachedClient = createClient(supabaseUrl, supabaseAnonKey, {
+        
+        // 使用同源代理以绕过 GFW 和浏览器对 supabase.co 域名的直接拦截/CORS 限制
+        const finalUrl = typeof window !== "undefined"
+          ? `${window.location.origin}/api/supabase`
+          : supabaseUrl;
+
+        cachedClient = createClient(finalUrl, supabaseAnonKey, {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
