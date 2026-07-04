@@ -12,6 +12,7 @@ export const translations = {
       assistant: "AI Assistant",
       calendar: "Economic Calendar",
       preMarket: "Pre-Market",
+      backtest: "Backtest",
       positionCalc: "Position Calc",
       sop: "SOP",
       settings: "Settings",
@@ -25,6 +26,7 @@ export const translations = {
       accounts: "Accounts",
       assistant: "AI Assistant",
       calendar: "Economic Calendar",
+      backtest: "Backtest",
       preMarket: "Pre-Market Checklist",
       positionCalc: "Position Calculator",
       sop: "SOP",
@@ -332,6 +334,7 @@ export const translations = {
       accounts: "账户管理",
       assistant: "AI 助手",
       calendar: "经济日历",
+      backtest: "回测",
       preMarket: "盘前清单",
       positionCalc: "仓位计算",
       sop: "SOP",
@@ -345,6 +348,7 @@ export const translations = {
       accounts: "账户管理",
       assistant: "AI 助手",
       calendar: "经济日历",
+      backtest: "策略回测",
       preMarket: "开盘前清单",
       positionCalc: "仓位计算器",
       sop: "SOP",
@@ -645,6 +649,7 @@ export type TranslationKeys = {
     accounts: string;
     assistant: string;
     calendar: string;
+    backtest: string;
     preMarket: string;
     positionCalc: string;
     sop: string;
@@ -658,6 +663,7 @@ export type TranslationKeys = {
     accounts: string;
     assistant: string;
     calendar: string;
+    backtest: string;
     preMarket: string;
     positionCalc: string;
     sop: string;

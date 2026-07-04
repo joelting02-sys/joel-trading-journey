@@ -154,7 +154,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 calendarContent: settingsState.calendarContent,
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
-                positionCalcHistory: settingsState.positionCalcHistory
+                positionCalcHistory: settingsState.positionCalcHistory,
+                drawdownEvents: settingsState.drawdownEvents
               },
               sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt || Date.now()
@@ -186,7 +187,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 calendarContent: settingsState.calendarContent,
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
-                positionCalcHistory: settingsState.positionCalcHistory
+                positionCalcHistory: settingsState.positionCalcHistory,
+                drawdownEvents: settingsState.drawdownEvents
               },
               sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt
@@ -226,6 +228,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
           if (s.calendarUpdatedAt !== undefined) settingsUpdate.calendarUpdatedAt = s.calendarUpdatedAt;
           if (s.preMarketChecks) settingsUpdate.preMarketChecks = s.preMarketChecks;
           if (s.positionCalcHistory) settingsUpdate.positionCalcHistory = s.positionCalcHistory;
+          if (s.drawdownEvents) settingsUpdate.drawdownEvents = s.drawdownEvents;
 
           settingsUpdate.clientUpdatedAt = serverUpdatedAt;
           settingsUpdate.lastSyncedAt = serverUpdatedAt;

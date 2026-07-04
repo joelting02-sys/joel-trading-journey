@@ -63,7 +63,18 @@ export default defineConfig({
         target: 'https://imemwbgtxnkfodncfgal.supabase.co',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/supabase/, ''),
-      }
+      },
+      // Yahoo Finance 历史行情代理（解决浏览器 CORS）
+      // 用法: /api/yahoo/v8/finance/chart/EURUSD=X?interval=1d&range=6mo
+      '/api/yahoo': {
+        target: 'https://query1.finance.yahoo.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Joel-TradingJournal/1.0)',
+          'Accept': 'application/json',
+        },
+      },
     }
   },
   plugins: [

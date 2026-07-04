@@ -10,9 +10,10 @@ import Settings from "@/pages/Settings";
 import Assistant from "@/pages/Assistant";
 import Sop from "@/pages/Sop";
 import EconomicCalendar from "@/pages/EconomicCalendar";
-import PreMarket from "@/pages/PreMarket";
+// PreMarket removed — SOP already covers pre-session checklist
 import PositionCalculator from "@/pages/PositionCalculator";
 import TradeDetail from "@/pages/TradeDetail";
+import Backtest from "@/pages/Backtest";
 import { tryRestoreDirectory } from "@/services/dataStorage";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
@@ -70,9 +71,9 @@ export default function App() {
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/assistant" element={<Assistant />} />
           <Route path="/calendar" element={<EconomicCalendar />} />
-          <Route path="/pre-market" element={<PreMarket />} />
           <Route path="/position-calc" element={<PositionCalculator />} />
           <Route path="/sop" element={<Sop />} />
+          <Route path="/backtest" element={<Backtest />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Router>

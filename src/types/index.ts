@@ -261,3 +261,30 @@ export interface PositionCalcRecord {
   positionSize: number; // 手数(lots)
   units: number;
 }
+
+// =============== 回撤记录（Drawdown Log）===============
+// 用户手动记录的回撤事件（与自动检测的回撤分开，便于复盘）
+export type DrawdownSeverity = "minor" | "moderate" | "severe";
+
+export interface DrawdownEvent {
+  id: string;
+  // 触发日期 (YYYY-MM-DD)
+  startDate: string;
+  // 最大回撤深度（百分比，正数，如 8.5 表示 8.5%）
+  depthPercent: number;
+  // 恢复日期（YYYY-MM-DD），未恢复则为空
+  recoveryDate: string;
+  // 恢复所用的天数（手填或自动算）
+  recoveryDays: number;
+  // 当时的起始权益（可选）
+  peakEquity?: number;
+  // 谷底权益（可选）
+  troughEquity?: number;
+  // 严重程度（minor < 5%, moderate 5-10%, severe > 10%）
+  severity: DrawdownSeverity;
+  // 用户的复盘笔记：为什么会发生、哪里做错了
+  cause: string;
+  // 标签（情绪 / 系统 / 仓位 / 黑天鹅 等），逗号分隔
+  tags: string;
+  createdAt: number;
+}

@@ -10,6 +10,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   Calculator,
+  History,
   Settings as SettingsIcon,
   X,
 } from "lucide-react";
@@ -29,7 +30,7 @@ export default function Sidebar() {
     { key: "accounts", label: t.nav.accounts, path: "/accounts", icon: Wallet },
     { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: Bot },
     { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
-    { key: "pre-market", label: t.nav.preMarket, path: "/pre-market", icon: ClipboardCheck },
+    { key: "backtest", label: t.nav.backtest, path: "/backtest", icon: History },
     { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
     { key: "sop", label: t.nav.sop, path: "/sop", icon: ClipboardList },
   ];

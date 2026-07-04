@@ -45,34 +45,62 @@ ChartJS.register(
 );
 
 const PRIMARY = "#099268";
+const PRIMARY_LIGHT = "#12b886";
 const LOSS = "#e03131";
+const LOSS_LIGHT = "#ff6b6b";
 const MONO = "'JetBrains Mono', monospace";
 const INTER = "'Inter', sans-serif";
+const ACCENT_PURPLE = "#845ef7";
+const ACCENT_ORANGE = "#f59f00";
+const ACCENT_BLUE = "#339af0";
 
-// 通用 tooltip 样式
-const tooltipStyle = {
-  backgroundColor: "#1a1a2e",
-  borderWidth: 0,
-  titleColor: "#868e96",
-  bodyColor: "#f8f9fa",
-  titleFont: { family: INTER, size: 11 },
-  bodyFont: { family: MONO, size: 12, weight: 600 as const },
-  padding: 12,
-  cornerRadius: 8,
-  displayColors: true,
-  boxPadding: 4,
+// 创建渐变函数
+const createGradient = (ctx: CanvasRenderingContext2D | null, color1: string, color2: string, height: number) => {
+  if (!ctx) return color1;
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, color1);
+  gradient.addColorStop(1, color2);
+  return gradient;
 };
 
-// 通用坐标轴样式
+// 通用 tooltip 样式 - 玻璃态效果
+const tooltipStyle = {
+  backgroundColor: "rgba(26, 26, 46, 0.95)",
+  borderColor: "rgba(255, 255, 255, 0.1)",
+  borderWidth: 1,
+  titleColor: "#adb5bd",
+  bodyColor: "#f8f9fa",
+  titleFont: { family: INTER, size: 11, weight: 500 as const },
+  bodyFont: { family: MONO, size: 12, weight: 600 as const },
+  padding: 14,
+  cornerRadius: 10,
+  displayColors: true,
+  boxPadding: 6,
+  usePointStyle: true,
+  pointStyle: "circle" as const,
+};
+
+// 通用坐标轴样式 - 更精致
 const axisStyle = {
   x: {
     grid: { display: false },
-    ticks: { color: "#868e96", font: { family: MONO, size: 11 }, maxRotation: 0 },
+    ticks: {
+      color: "#868e96",
+      font: { family: MONO, size: 10, weight: 500 as const },
+      maxRotation: 0,
+    },
     border: { display: false },
   },
   y: {
-    grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
-    ticks: { color: "#868e96", font: { family: MONO, size: 11 } },
+    grid: {
+      color: "rgba(0, 0, 0, 0.03)",
+      drawBorder: false,
+    },
+    ticks: {
+      color: "#868e96",
+      font: { family: MONO, size: 10, weight: 500 as const },
+      padding: 8,
+    },
     border: { display: false },
   },
 };
@@ -115,7 +143,7 @@ export default function Analytics() {
 
     const months = monthlyData.map((m) => m.month);
 
-    // 月度盈亏柱状图 + 累计盈亏曲线(双轴)
+    // 月度盈亏柱状图 + 累计盈亏曲线(双轴) - 增强视觉效果
     const monthlyPnl = {
       data: {
         labels: months,
@@ -124,9 +152,14 @@ export default function Analytics() {
             type: "bar" as const,
             label: language === "zh" ? "月度盈亏" : "Monthly P&L",
             data: monthlyData.map((m) => m.pnl),
-            backgroundColor: monthlyData.map((m) => (m.pnl >= 0 ? PRIMARY : LOSS)),
-            borderRadius: 4,
-            maxBarThickness: 30,
+            backgroundColor: monthlyData.map((m) =>
+              m.pnl >= 0
+                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "dd", PRIMARY + "cc", 280)
+                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "dd", LOSS + "cc", 280)
+            ),
+            borderRadius: 6,
+            maxBarThickness: 28,
+            borderSkipped: false as const,
             yAxisID: "y",
             order: 2,
           },
@@ -134,17 +167,23 @@ export default function Analytics() {
             type: "line" as const,
             label: language === "zh" ? "累计盈亏" : "Cumulative",
             data: monthlyData.map((m) => m.cumulative),
-            borderColor: "#1a1a2e",
-            backgroundColor: "rgba(26,26,46,0.06)",
-            fill: false,
-            tension: 0.35,
-            pointRadius: 3,
-            pointBackgroundColor: "#1a1a2e",
+            borderColor: ACCENT_PURPLE,
+            backgroundColor: (() => {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              return createGradient(ctx, ACCENT_PURPLE + "30", ACCENT_PURPLE + "00", 280);
+            })(),
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: ACCENT_PURPLE,
             pointBorderColor: "#ffffff",
-            pointBorderWidth: 1.5,
-            pointHoverRadius: 5,
-            borderWidth: 2,
-            borderDash: [4, 3],
+            pointBorderWidth: 2,
+            pointHoverRadius: 7,
+            pointHoverBackgroundColor: ACCENT_PURPLE,
+            pointHoverBorderColor: "#ffffff",
+            pointHoverBorderWidth: 3,
+            borderWidth: 2.5,
             yAxisID: "y1",
             order: 1,
           },
@@ -165,7 +204,10 @@ export default function Analytics() {
           },
         },
         scales: {
-          x: axisStyle.x,
+          x: {
+            ...axisStyle.x,
+            grid: { display: false },
+          },
           y: {
             ...axisStyle.y,
             ticks: { ...axisStyle.y.ticks, callback: (v: number) => "$" + (v / 1000).toFixed(1) + "k" },
@@ -174,14 +216,18 @@ export default function Analytics() {
             type: "linear" as const,
             position: "right" as const,
             grid: { display: false },
-            ticks: { color: "#1a1a2e", font: { family: MONO, size: 11 } },
+            ticks: {
+              color: ACCENT_PURPLE,
+              font: { family: MONO, size: 10, weight: 600 as const },
+              callback: (v: number) => "$" + (v / 1000).toFixed(1) + "k",
+            },
             border: { display: false },
           },
         },
       } as ChartOptions<"bar">,
     };
 
-    // 胜率趋势(带 50% 参考线)
+    // 胜率趋势(带 50% 参考线) - 增强渐变效果
     const winRateChart = {
       data: {
         labels: months,
@@ -193,19 +239,19 @@ export default function Analytics() {
             backgroundColor: (() => {
               const canvas = document.createElement("canvas");
               const ctx = canvas.getContext("2d");
-              const g = ctx?.createLinearGradient(0, 0, 0, 280);
-              g?.addColorStop(0, "rgba(9, 146, 104, 0.2)");
-              g?.addColorStop(1, "rgba(9, 146, 104, 0)");
-              return g;
+              return createGradient(ctx, PRIMARY + "35", PRIMARY + "00", 280);
             })(),
             fill: true,
-            tension: 0.35,
-            pointRadius: 4,
+            tension: 0.4,
+            pointRadius: 5,
             pointBackgroundColor: PRIMARY,
             pointBorderColor: "#ffffff",
-            pointBorderWidth: 2,
-            pointHoverRadius: 6,
-            borderWidth: 2.5,
+            pointBorderWidth: 2.5,
+            pointHoverRadius: 8,
+            pointHoverBackgroundColor: PRIMARY,
+            pointHoverBorderColor: "#ffffff",
+            pointHoverBorderWidth: 3,
+            borderWidth: 3,
           },
         ],
       },
@@ -217,7 +263,6 @@ export default function Analytics() {
             ...tooltipStyle,
             callbacks: { label: (c: Ctx) => c.parsed.y.toFixed(1) + "%" },
           },
-          annotation: {},
         },
         scales: {
           x: axisStyle.x,
@@ -231,7 +276,7 @@ export default function Analytics() {
       },
     };
 
-    // 盈亏分布
+    // 盈亏分布 - 增强渐变效果
     const distribution = {
       data: {
         labels: distData.map((d) => d.range),
@@ -239,9 +284,14 @@ export default function Analytics() {
           {
             label: language === "zh" ? "交易数" : "Trades",
             data: distData.map((d) => d.count),
-            backgroundColor: distData.map((d) => (d.pnl >= 0 ? PRIMARY : LOSS)),
-            borderRadius: 4,
-            maxBarThickness: 36,
+            backgroundColor: distData.map((d) =>
+              d.pnl >= 0
+                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "cc", PRIMARY + "bb", 280)
+                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "cc", LOSS + "bb", 280)
+            ),
+            borderRadius: 6,
+            maxBarThickness: 32,
+            borderSkipped: false as const,
           },
         ],
       },
@@ -252,12 +302,19 @@ export default function Analytics() {
           tooltip: {
             ...tooltipStyle,
             callbacks: {
-              label: (c: Ctx) => c.parsed.y + (language === "zh" ? " 笔" : " trades"),
+              label: (c: Ctx) => c.parsed.y + (language === "zh" ? " 笔交易" : " trades"),
             },
           },
         },
         scales: {
-          x: axisStyle.x,
+          x: {
+            ...axisStyle.x,
+            ticks: {
+              ...axisStyle.x.ticks,
+              maxRotation: 45,
+              minRotation: 0,
+            },
+          },
           y: { ...axisStyle.y, beginAtZero: true, ticks: { ...axisStyle.y.ticks, precision: 0 } },
         },
       },
@@ -274,7 +331,7 @@ export default function Analytics() {
     };
   }, [trades, currency, language]);
 
-  // 多空分析环形图
+  // 多空分析环形图 - 精致化
   const directionDoughnut = useMemo(() => {
     const ds = directionStats;
     return {
@@ -283,26 +340,32 @@ export default function Analytics() {
         datasets: [
           {
             data: [ds.long.count, ds.short.count],
-            backgroundColor: [PRIMARY, LOSS],
-            borderWidth: 0,
-            hoverOffset: 6,
+            backgroundColor: [
+              createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT, PRIMARY, 200),
+              createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT, LOSS, 200),
+            ],
+            borderColor: "#ffffff",
+            borderWidth: 3,
+            hoverOffset: 10,
+            hoverBorderWidth: 4,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: "68%",
+        cutout: "70%",
         plugins: {
           legend: {
             display: true,
             position: "bottom" as const,
             labels: {
               color: "#495057",
-              font: { family: INTER, size: 12 },
-              padding: 12,
+              font: { family: INTER, size: 12, weight: 500 as const },
+              padding: 16,
               usePointStyle: true,
               pointStyle: "circle" as const,
+              pointStyleWidth: 10,
             },
           },
           tooltip: {
@@ -316,11 +379,15 @@ export default function Analytics() {
             },
           },
         },
+        animation: {
+          animateRotate: true,
+          animateScale: true,
+        },
       },
     };
   }, [directionStats, language]);
 
-  // 星期表现柱状图
+  // 星期表现柱状图 - 增强视觉
   const dayOfWeekChart = useMemo(() => {
     const dow = dayOfWeekData;
     return {
@@ -330,9 +397,14 @@ export default function Analytics() {
           {
             label: language === "zh" ? "盈亏" : "P&L",
             data: dow.map((d) => d.pnl),
-            backgroundColor: dow.map((d) => (d.pnl >= 0 ? PRIMARY : LOSS)),
-            borderRadius: 4,
-            maxBarThickness: 34,
+            backgroundColor: dow.map((d) =>
+              d.pnl >= 0
+                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "dd", PRIMARY + "cc", 280)
+                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "dd", LOSS + "cc", 280)
+            ),
+            borderRadius: 6,
+            maxBarThickness: 30,
+            borderSkipped: false as const,
           },
         ],
       },
@@ -348,8 +420,8 @@ export default function Analytics() {
                 const d = dow[c.dataIndex];
                 return [
                   (language === "zh" ? "盈亏: " : "P&L: ") + formatSignedCurrencyConverted(c.parsed.y, currency, 0),
-                  (language === "zh" ? "交易: " : "Trades: ") + d.trades,
-                  (language === "zh" ? "胜率: " : "Win: ") + d.winRate + "%",
+                  (language === "zh" ? "交易数: " : "Trades: ") + d.trades,
+                  (language === "zh" ? "胜率: " : "Win Rate: ") + d.winRate + "%",
                 ];
               },
             },
@@ -459,164 +531,245 @@ export default function Analytics() {
 
   return (
     <Layout title={t.title.analytics}>
-      {/* KPI 卡片行 (8 个) */}
-      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {/* KPI 卡片行 (8 个) - 精致化设计 */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {stats.map((s) => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="rounded-lg border border-border bg-bg-surface px-4 py-3.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-text-muted">{s.label}</span>
-                <span className={`flex h-7 w-7 items-center justify-center rounded-md ${s.bg}`}>
-                  <Icon className={`h-3.5 w-3.5 ${s.color}`} />
-                </span>
+            <div
+              key={s.label}
+              className="group relative overflow-hidden rounded-xl border border-border bg-bg-surface px-4 py-4 transition-all duration-200 hover:border-border/80 hover:shadow-sm"
+            >
+              {/* 背景装饰 */}
+              <div
+                className={`absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-5 blur-xl transition-opacity duration-300 group-hover:opacity-10 ${s.bg}`}
+              />
+              <div className="relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                    {s.label}
+                  </span>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${s.bg} transition-transform duration-200 group-hover:scale-110`}
+                  >
+                    <Icon className={`h-4 w-4 ${s.color}`} />
+                  </span>
+                </div>
+                <div className={`tj-number mt-2.5 text-2xl font-bold tracking-tight ${s.color}`}>
+                  {s.value}
+                </div>
               </div>
-              <div className={`tj-number mt-2 text-xl font-bold ${s.color}`}>{s.value}</div>
             </div>
           );
         })}
       </div>
 
-      {/* 次级指标小卡片行 */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {/* 次级指标小卡片行 - 精致化 */}
+      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
         {subStats.map((s) => (
-          <div key={s.label} className="rounded-md border border-border bg-bg-surface/60 px-3 py-2">
-            <div className="text-[10px] font-medium text-text-muted">{s.label}</div>
-            <div className={`tj-number mt-0.5 text-sm font-semibold ${s.positive ? "text-primary" : "text-loss"}`}>
+          <div
+            key={s.label}
+            className="rounded-lg border border-border bg-bg-surface/80 px-3.5 py-2.5 transition-all duration-200 hover:bg-bg-surface"
+          >
+            <div className="text-[10px] font-medium uppercase tracking-wide text-text-muted">
+              {s.label}
+            </div>
+            <div
+              className={`tj-number mt-1 text-sm font-bold ${s.positive ? "text-primary" : "text-loss"}`}
+            >
               {s.value}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 图表网格 */}
+      {/* 图表网格 - 精致化卡片设计 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 月度盈亏 + 累计曲线 */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Award className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.monthlyPnl}</span>
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <Award className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.monthlyPnl}
+              </span>
+            </div>
           </div>
-          <div className="relative h-[280px]">
+          <div className="relative h-[280px] px-5 py-4">
             <Chart type="bar" data={monthlyPnl.data} options={monthlyPnl.options} />
           </div>
         </div>
 
         {/* 胜率趋势 */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.winRateTrend}</span>
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <Target className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.winRateTrend}
+              </span>
+            </div>
           </div>
-          <div className="relative h-[280px]">
+          <div className="relative h-[280px] px-5 py-4">
             <Line data={winRateChart.data} options={winRateChart.options} />
             {/* 50% 参考线 */}
-            <div className="pointer-events-none absolute left-0 right-0" style={{ bottom: "50%" }}>
-              <div className="border-t border-dashed border-text-muted/30" />
-              <span className="absolute right-0 -top-2.5 text-[10px] text-text-muted">50%</span>
+            <div className="pointer-events-none absolute left-5 right-5" style={{ bottom: "calc(50% + 16px)" }}>
+              <div className="border-t border-dashed border-text-muted/20" />
+              <span className="absolute right-0 -top-2.5 rounded bg-bg-surface px-1.5 text-[10px] font-medium text-text-muted">
+                50%
+              </span>
             </div>
           </div>
         </div>
 
         {/* 盈亏分布 */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.pnlDistribution}</span>
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-info/10">
+                <Activity className="h-3.5 w-3.5 text-info" />
+              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.pnlDistribution}
+              </span>
+            </div>
           </div>
-          <div className="relative h-[280px]">
+          <div className="relative h-[280px] px-5 py-4">
             <Bar data={distribution.data} options={distribution.options} />
           </div>
         </div>
 
         {/* 多空分析环形图 */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Scale className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.directionAnalysis}</span>
-          </div>
-          <div className="relative h-[200px]">
-            <Doughnut data={directionDoughnut.data} options={directionDoughnut.options} />
-          </div>
-          {/* 多空明细 */}
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-md bg-primary/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                {language === "zh" ? "做多" : "Long"}
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
+                <Scale className="h-3.5 w-3.5 text-warning" />
               </div>
-              <div className="tj-number mt-1 text-sm font-bold text-primary">
-                {formatSignedCurrencyConverted(directionStats.long.pnl, currency, 0)}
-              </div>
-              <div className="text-[10px] text-text-muted">
-                {directionStats.long.count} {language === "zh" ? "笔" : "trades"} · {directionStats.long.winRate}%
-              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.directionAnalysis}
+              </span>
             </div>
-            <div className="rounded-md bg-loss/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                <span className="h-2 w-2 rounded-full bg-loss" />
-                {language === "zh" ? "做空" : "Short"}
+          </div>
+          <div className="px-5 py-4">
+            <div className="relative h-[180px]">
+              <Doughnut data={directionDoughnut.data} options={directionDoughnut.options} />
+            </div>
+            {/* 多空明细 */}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-primary/5 px-3.5 py-2.5 transition-all duration-200 hover:bg-primary/10">
+                <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                  {language === "zh" ? "做多" : "Long"}
+                </div>
+                <div className="tj-number mt-1.5 text-base font-bold text-primary">
+                  {formatSignedCurrencyConverted(directionStats.long.pnl, currency, 0)}
+                </div>
+                <div className="text-[10px] text-text-muted">
+                  {directionStats.long.count} {language === "zh" ? "笔交易" : "trades"} ·{" "}
+                  {directionStats.long.winRate}% {language === "zh" ? "胜率" : "win"}
+                </div>
               </div>
-              <div className="tj-number mt-1 text-sm font-bold text-loss">
-                {formatSignedCurrencyConverted(directionStats.short.pnl, currency, 0)}
-              </div>
-              <div className="text-[10px] text-text-muted">
-                {directionStats.short.count} {language === "zh" ? "笔" : "trades"} · {directionStats.short.winRate}%
+              <div className="rounded-lg bg-loss/5 px-3.5 py-2.5 transition-all duration-200 hover:bg-loss/10">
+                <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
+                  <span className="h-2.5 w-2.5 rounded-full bg-loss" />
+                  {language === "zh" ? "做空" : "Short"}
+                </div>
+                <div className="tj-number mt-1.5 text-base font-bold text-loss">
+                  {formatSignedCurrencyConverted(directionStats.short.pnl, currency, 0)}
+                </div>
+                <div className="text-[10px] text-text-muted">
+                  {directionStats.short.count} {language === "zh" ? "笔交易" : "trades"} ·{" "}
+                  {directionStats.short.winRate}% {language === "zh" ? "胜率" : "win"}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* 星期表现 */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Flame className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.dayOfWeek}</span>
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
+                <Flame className="h-3.5 w-3.5 text-warning" />
+              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.dayOfWeek}
+              </span>
+            </div>
           </div>
-          <div className="relative h-[280px]">
+          <div className="relative h-[280px] px-5 py-4">
             <Bar data={dayOfWeekChart.data} options={dayOfWeekChart.options} />
           </div>
         </div>
 
         {/* 品种表现表格(带进度条) */}
-        <div className="rounded-lg border border-border bg-bg-surface px-5 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">{t.analyticsPage.symbolPerformance}</span>
+        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="font-display text-sm font-semibold text-text">
+                {t.analyticsPage.symbolPerformance}
+              </span>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="py-2 pr-3 text-left font-medium text-text-secondary">Symbol</th>
-                  <th className="px-2 py-2 text-right font-medium text-text-secondary">{t.analyticsPage.trades}</th>
-                  <th className="px-2 py-2 text-left font-medium text-text-secondary">P&L</th>
-                  <th className="pl-2 py-2 text-right font-medium text-text-secondary">Win</th>
-                </tr>
-              </thead>
-              <tbody>
-                {symbolRows.slice(0, 10).map((s) => (
-                  <tr key={s.symbol} className="border-b border-border-subtle last:border-0">
-                    <td className="tj-number py-2 pr-3 font-semibold text-text">{s.symbol}</td>
-                    <td className="tj-number px-2 py-2 text-right text-text-secondary">{s.trades}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 min-w-[40px] flex-1 overflow-hidden rounded-full bg-bg-elevated">
-                          <div
-                            className={`h-full rounded-full ${s.pnl >= 0 ? "bg-primary" : "bg-loss"}`}
-                            style={{ width: `${(Math.abs(s.pnl) / maxAbsPnl) * 100}%` }}
-                          />
-                        </div>
-                        <span className={`tj-number text-xs font-semibold ${s.pnl >= 0 ? "text-primary" : "text-loss"}`}>
-                          {formatSignedCurrencyConverted(s.pnl, currency, 0)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="tj-number pl-2 py-2 text-right text-text">{s.winRate}%</td>
+          <div className="px-5 py-4">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="py-2.5 pr-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      Symbol
+                    </th>
+                    <th className="px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      {t.analyticsPage.trades}
+                    </th>
+                    <th className="px-2 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      P&L
+                    </th>
+                    <th className="pl-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      Win
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {symbolRows.slice(0, 10).map((s) => (
+                    <tr
+                      key={s.symbol}
+                      className="border-b border-border-subtle last:border-0 transition-colors hover:bg-bg-hover/50"
+                    >
+                      <td className="tj-number py-2.5 pr-3 font-semibold text-text">{s.symbol}</td>
+                      <td className="tj-number px-2 py-2.5 text-right text-text-secondary">{s.trades}</td>
+                      <td className="px-2 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-2 min-w-[40px] flex-1 overflow-hidden rounded-full bg-bg-elevated">
+                            <div
+                              className={`h-full rounded-full ${s.pnl >= 0 ? "bg-primary" : "bg-loss"}`}
+                              style={{ width: `${(Math.abs(s.pnl) / maxAbsPnl) * 100}%` }}
+                            />
+                          </div>
+                          <span
+                            className={`tj-number text-xs font-bold ${s.pnl >= 0 ? "text-primary" : "text-loss"}`}
+                          >
+                            {formatSignedCurrencyConverted(s.pnl, currency, 0)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="tj-number pl-2 py-2.5 text-right font-medium text-text">
+                        {s.winRate}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

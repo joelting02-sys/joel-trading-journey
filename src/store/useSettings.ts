@@ -15,6 +15,7 @@ import type {
   CalendarImportanceFilter,
   PreMarketCheck,
   PositionCalcRecord,
+  DrawdownEvent,
 } from "@/types";
 import {
   getLocation,
@@ -166,6 +167,8 @@ interface SettingsStore {
   preMarketChecks: PreMarketCheck[];
   // 仓位计算器历史
   positionCalcHistory: PositionCalcRecord[];
+  // 回撤事件记录(用户手动复盘用)
+  drawdownEvents: DrawdownEvent[];
 
   // 云端同步配置
   supabaseUrl: string;
@@ -203,6 +206,9 @@ interface SettingsStore {
   deletePreMarketCheck: (id: string) => void;
   addPositionCalcRecord: (record: PositionCalcRecord) => void;
   deletePositionCalcRecord: (id: string) => void;
+  addDrawdownEvent: (event: DrawdownEvent) => void;
+  updateDrawdownEvent: (event: DrawdownEvent) => void;
+  deleteDrawdownEvent: (id: string) => void;
   
   setSupabaseUrl: (url: string) => void;
   setSupabaseAnonKey: (key: string) => void;
@@ -238,6 +244,7 @@ const settingsDualStorage: PersistStorage<SettingsStore> = {
         calendarUpdatedAt: s.calendarUpdatedAt,
         preMarketChecks: s.preMarketChecks,
         positionCalcHistory: s.positionCalcHistory,
+        drawdownEvents: s.drawdownEvents,
       };
       saveSettingsToDisk(settings).catch(() => {});
     }
@@ -260,6 +267,7 @@ export const useSettings = create<SettingsStore>()(
       calendarContent: "",
       calendarUpdatedAt: "",
       preMarketChecks: [],
+      drawdownEvents: [],
       positionCalcHistory: [],
       
       supabaseUrl: "https://imemwbgtxnkfodncfgal.supabase.co",
@@ -455,13 +463,27 @@ export const useSettings = create<SettingsStore>()(
         set((state) => ({ positionCalcHistory: state.positionCalcHistory.filter((r) => r.id !== id) }));
         onDataMutation();
       },
+      addDrawdownEvent: (event) => {
+        set((state) => ({ drawdownEvents: [event, ...state.drawdownEvents] }));
+        onDataMutation();
+      },
+      updateDrawdownEvent: (event) => {
+        set((state) => ({
+          drawdownEvents: state.drawdownEvents.map((e) => (e.id === event.id ? event : e)),
+        }));
+        onDataMutation();
+      },
+      deleteDrawdownEvent: (id) => {
+        set((state) => ({ drawdownEvents: state.drawdownEvents.filter((e) => e.id !== id) }));
+        onDataMutation();
+      },
       t: () => translations[get().language] as unknown as TranslationKeys,
 
       // 从磁盘读取真实数据(覆盖 localStorage 旧值)
       hydrateFromDisk: async () => {
         const [sopData, settings] = await Promise.all([
           loadSopFromDisk<SopRule[] | SopSet[] | null>(null),
-          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[]; sopSets?: SopSet[]; activeSopSetId?: string } | null>(null),
+          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[]; drawdownEvents?: DrawdownEvent[]; sopSets?: SopSet[]; activeSopSetId?: string } | null>(null),
         ]);
         if (sopData && sopData.length > 0) {
           const first = sopData[0] as SopRule | SopSet;
@@ -484,13 +506,14 @@ export const useSettings = create<SettingsStore>()(
           if (settings.calendarUpdatedAt !== undefined) set({ calendarUpdatedAt: settings.calendarUpdatedAt });
           if (settings.preMarketChecks) set({ preMarketChecks: settings.preMarketChecks });
           if (settings.positionCalcHistory) set({ positionCalcHistory: settings.positionCalcHistory });
+          if (settings.drawdownEvents) set({ drawdownEvents: settings.drawdownEvents });
         }
       },
     }),
     {
       name: "tj-settings-store",
       storage: settingsDualStorage,
-      version: 8,
+      version: 9,
       // 持久化配置和聊天记录(聊天图片已压缩,不会超限)
       partialize: ((state: SettingsStore) => ({
         language: state.language,
@@ -505,6 +528,7 @@ export const useSettings = create<SettingsStore>()(
         calendarUpdatedAt: state.calendarUpdatedAt,
         preMarketChecks: state.preMarketChecks,
         positionCalcHistory: state.positionCalcHistory,
+        drawdownEvents: state.drawdownEvents,
         supabaseUrl: state.supabaseUrl,
         supabaseAnonKey: state.supabaseAnonKey,
         supabaseUserEmail: state.supabaseUserEmail,
@@ -579,6 +603,10 @@ export const useSettings = create<SettingsStore>()(
           }
           s.activeSopSetId = "sop-default";
           delete (s as Record<string, unknown>).sopRules;
+        }
+        // v8→v9: 新增 drawdownEvents(回撤事件日志)
+        if (version < 9) {
+          s.drawdownEvents = [];
         }
         return s as unknown as SettingsStore;
       }) as (persistedState: unknown, version: number) => SettingsStore,
