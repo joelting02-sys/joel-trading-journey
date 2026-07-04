@@ -180,24 +180,7 @@ export default function Settings() {
     }
   }, []);
 
-  // 检查是否需要迁移提示(有 localStorage 旧数据但未选目录)
-  useEffect(() => {
-    if (dataLocation !== "none") return;
-    const hasOldData =
-      localStorage.getItem("tj-trade-store") || localStorage.getItem("tj-settings-store");
-    if (hasOldData) {
-      // 只在组件挂载时提示一次
-      setTimeout(() => {
-        const ok = window.confirm(
-          language === "zh"
-            ? "检测到旧数据(存在浏览器缓存中)。是否立即选择文件夹,把所有数据迁移到本地 JSON 文件?(强烈建议)"
-            : "Detected old data in browser cache. Choose a folder to migrate all data to local JSON files now? (Strongly recommended)"
-        );
-        if (ok) handlePickFolder();
-      }, 500);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
 
   async function handlePickFolder() {
     setLocationError("");
