@@ -22,7 +22,7 @@ import {
   type DataLocation,
   exportAllToFile,
 } from "@/services/dataStorage";
-import { triggerSupabaseSync, getSupabaseClient, fetchDevices, removeCurrentDevice, signOutLocal, type DeviceInfo } from "@/services/supabaseService";
+import { triggerSupabaseSync, getSupabaseClient, fetchDevices, removeCurrentDevice, type DeviceInfo } from "@/services/supabaseService";
 import { useDialogStore } from "@/store/useDialogStore";
 
 export default function Settings() {
@@ -133,6 +133,10 @@ export default function Settings() {
         const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
         if (data.session && data.user) {
+          useSettings.setState({
+            supabaseUserEmail: data.user.email || "",
+            supabaseSessionToken: data.session.access_token || ""
+          });
           setTimeout(handleCloudSync, 200);
         }
       } else {
@@ -156,15 +160,21 @@ export default function Settings() {
     try {
       const client = getSupabaseClient();
       if (client) {
-        await removeCurrentDevice(client).catch(() => {});
+        await removeCurrentDevice(client);
+        await client.auth.signOut({ scope: "local" });
       }
-    } catch {
-      // Ignore
+    } catch (e) {
+      // Ignore auth error on sign out
+    } finally {
+      useSettings.setState({
+        supabaseUserEmail: "",
+        supabaseSessionToken: "",
+        lastSyncedAt: 0
+      });
+      setDevices([]);
+      setEmail("");
+      setPassword("");
     }
-    signOutLocal();
-    setDevices([]);
-    setEmail("");
-    setPassword("");
   }
 
   // 自动填充默认的 Supabase 凭证

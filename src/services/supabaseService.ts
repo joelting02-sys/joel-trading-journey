@@ -9,54 +9,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
     const DEFAULT_URL = "https://imemwbgtxnkfodncfgal.supabase.co";
     const DEFAULT_KEY = "sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO";
 
-    // ─── Multi-Account Session Manager ───────────────────────────────
-
-    const SESSION_PREFIX = "tj-session-";
-    const ACTIVE_USER_KEY = "tj-active-user";
-    const SB_AUTH_KEY = "sb-imemwbgtxnkfodncfgal-auth-token";
-
-    function sessionKeyFor(email: string): string {
-      return SESSION_PREFIX + email.toLowerCase();
-    }
-
-    function saveUserSession(email: string, session: any): void {
-      try {
-        localStorage.setItem(sessionKeyFor(email), JSON.stringify(session));
-        localStorage.setItem(ACTIVE_USER_KEY, email.toLowerCase());
-      } catch {}
-    }
-
-    function loadUserSession(email: string): any | null {
-      try {
-        const raw = localStorage.getItem(sessionKeyFor(email));
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    }
-
-    function clearUserSession(email: string): void {
-      try {
-        localStorage.removeItem(sessionKeyFor(email));
-        localStorage.removeItem(SB_AUTH_KEY);
-        const active = localStorage.getItem(ACTIVE_USER_KEY);
-        if (active === email.toLowerCase()) {
-          localStorage.removeItem(ACTIVE_USER_KEY);
-        }
-      } catch {}
-    }
-
-    function restoreActiveSession(): void {
-      try {
-        const activeEmail = localStorage.getItem(ACTIVE_USER_KEY);
-        if (!activeEmail) return;
-        const session = loadUserSession(activeEmail);
-        if (session) {
-          localStorage.setItem(SB_AUTH_KEY, JSON.stringify(session));
-        }
-      } catch {}
-    }
-
     export function getSupabaseClient(): SupabaseClient | null {
       const state = useSettings.getState();
       const supabaseUrl = state.supabaseUrl || DEFAULT_URL;
@@ -74,9 +26,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       try {
         cachedUrl = supabaseUrl;
         cachedKey = supabaseAnonKey;
-
-        restoreActiveSession();
-
+        
+        // 使用同源代理以绕过 GFW 和浏览器对 supabase.co 域名的直接拦截/CORS 限制
         const finalUrl = typeof window !== "undefined"
           ? `${window.location.origin}/api/supabase`
           : supabaseUrl;
@@ -98,22 +49,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       }
     }
 
-    export function signOutLocal(): void {
-      const email = useSettings.getState().supabaseUserEmail;
-      if (email) {
-        clearUserSession(email);
-      }
-      cachedClient = null;
-      cachedUrl = "";
-      cachedKey = "";
-      useSettings.setState({
-        supabaseUserEmail: "",
-        supabaseSessionToken: "",
-        syncEnabled: false,
-        lastSyncedAt: 0
-      });
-    }
-
     export async function initializeSupabaseListener() {
       const client = getSupabaseClient();
       if (!client) return;
@@ -121,10 +56,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       try {
         const { data: { session } } = await client.auth.getSession();
         if (session && session.user) {
-          const email = session.user.email || "";
-          saveUserSession(email, session);
           useSettings.setState({
-            supabaseUserEmail: email,
+            supabaseUserEmail: session.user.email || "",
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });
@@ -137,10 +70,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
       client.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
-          const email = session.user.email || "";
-          saveUserSession(email, session);
           useSettings.setState({
-            supabaseUserEmail: email,
+            supabaseUserEmail: session.user.email || "",
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });

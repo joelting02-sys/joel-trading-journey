@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutGrid,
   ListChecks,
@@ -31,7 +31,14 @@ function NavIconRender({ icon, isActive }: { icon: NavIcon; isActive: boolean })
         alt=""
         width={size}
         height={size}
-        className={`shrink-0 ${isActive ? "opacity-100" : "opacity-55"}`}
+        className={`shrink-0 transition-all duration-150 ${
+          isActive ? "" : "opacity-65"
+        }`}
+        style={{
+          filter: isActive
+            ? "invert(0.4) sepia(1) saturate(5) hue-rotate(140deg)"
+            : "none",
+        }}
       />
     );
   }
@@ -43,8 +50,9 @@ export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useTradeStore();
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
+  const location = useLocation();
 
-  const navItems: { key: string; label: string; path: string; icon: NavIcon }[] = [
+  const navItems = [
     { key: "dashboard", label: t.nav.dashboard, path: "/", icon: LayoutGrid },
     { key: "trades", label: t.nav.trades, path: "/trades", icon: ListChecks },
     { key: "new-trade", label: t.nav.newTrade, path: "/new-trade", icon: PlusCircle },
@@ -109,12 +117,8 @@ export default function Sidebar() {
                   }`
                 }
               >
-                {({ isActive }) => (
-                  <>
-                    <NavIconRender icon={item.icon} isActive={isActive} />
-                    <span>{item.label}</span>
-                  </>
-                )}
+                <NavIconRender icon={item.icon} isActive={location.pathname === item.path} />
+                <span>{item.label}</span>
               </NavLink>
             );
           })}
