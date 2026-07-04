@@ -171,6 +171,8 @@ interface SettingsStore {
   drawdownEvents: DrawdownEvent[];
   // 自定义品种
   customSymbols: string[];
+  // 用户头像
+  avatarUrl: string;
 
   // 云端同步配置
   supabaseUrl: string;
@@ -213,6 +215,7 @@ interface SettingsStore {
   deleteDrawdownEvent: (id: string) => void;
   addCustomSymbol: (symbol: string) => void;
   removeCustomSymbol: (symbol: string) => void;
+  setAvatarUrl: (url: string) => void;
   
   setSupabaseUrl: (url: string) => void;
   setSupabaseAnonKey: (key: string) => void;
@@ -273,6 +276,7 @@ export const useSettings = create<SettingsStore>()(
       preMarketChecks: [],
       drawdownEvents: [],
       customSymbols: [],
+      avatarUrl: "",
       positionCalcHistory: [],
       
       supabaseUrl: "https://imemwbgtxnkfodncfgal.supabase.co",
@@ -495,6 +499,10 @@ export const useSettings = create<SettingsStore>()(
         set((state) => ({ customSymbols: state.customSymbols.filter((s) => s !== symbol) }));
         onDataMutation();
       },
+      setAvatarUrl: (url) => {
+        set({ avatarUrl: url });
+        onDataMutation();
+      },
       t: () => translations[get().language] as unknown as TranslationKeys,
 
       // 从磁盘读取真实数据(覆盖 localStorage 旧值)
@@ -548,6 +556,7 @@ export const useSettings = create<SettingsStore>()(
         positionCalcHistory: state.positionCalcHistory,
         drawdownEvents: state.drawdownEvents,
         customSymbols: state.customSymbols,
+        avatarUrl: state.avatarUrl,
         supabaseUrl: state.supabaseUrl,
         supabaseAnonKey: state.supabaseAnonKey,
         supabaseUserEmail: state.supabaseUserEmail,

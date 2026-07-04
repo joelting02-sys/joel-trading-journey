@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight, Monitor } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight, Monitor, User } from "lucide-react";
 import Layout from "@/components/Layout";
 import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
@@ -38,9 +38,10 @@ export default function Settings() {
   const setActiveAiConfigId = useSettings((s) => s.setActiveAiConfigId);
   const calendarPrefs = useSettings((s) => s.calendarPrefs);
   const setCalendarPrefs = useSettings((s) => s.setCalendarPrefs);
+  const avatarUrl = useSettings((s) => s.avatarUrl);
+  const supabaseUserEmail = useSettings((s) => s.supabaseUserEmail);
   const supabaseUrl = useSettings((s) => s.supabaseUrl);
   const supabaseAnonKey = useSettings((s) => s.supabaseAnonKey);
-  const supabaseUserEmail = useSettings((s) => s.supabaseUserEmail);
   const supabaseSessionToken = useSettings((s) => s.supabaseSessionToken);
   const syncEnabled = useSettings((s) => s.syncEnabled);
   const lastSyncedAt = useSettings((s) => s.lastSyncedAt);
@@ -80,6 +81,7 @@ export default function Settings() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [showSupabasePassword, setShowSupabasePassword] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
+  const [activeTab, setActiveTab] = useState<"account" | "general" | "ai" | "data">("account");
 
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(false);
@@ -492,511 +494,612 @@ export default function Settings() {
   return (
     <Layout title={t.title.settings}>
       <div className="mx-auto flex max-w-4xl flex-col gap-5">
-        {/* Preferences */}
-        <SettingsSection
-          icon={<SettingsIcon className="h-4 w-4" />}
-          title={t.settingsPage.preferences}
-          description={t.settingsPage.preferencesDesc}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t.settingsPage.defaultAccount}>
-              <Select
-                value={defaultAccount}
-                onChange={setDefaultAccount}
-                options={accounts.map((a) => ({ value: a.id, label: `${a.name} — ${a.broker}` }))}
-              />
-            </Field>
-            <Field label={t.settingsPage.dateFormat}>
-              <Select
-                value={dateFormat}
-                onChange={setDateFormat}
-                options={[
-                  { value: "MMM DD, YYYY", label: "MMM DD, YYYY" },
-                  { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
-                  { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
-                ]}
-              />
-            </Field>
-            <Field label={t.settingsPage.tradesPerPage}>
-              <Select
-                value={tradesPerPage}
-                onChange={setTradesPerPage}
-                options={[
-                  { value: "10", label: "10" },
-                  { value: "25", label: "25" },
-                  { value: "50", label: "50" },
-                ]}
-              />
-            </Field>
-            <Field label={t.settingsPage.language}>
-              <Select
-                value={language}
-                onChange={(v) => setLanguage(v as Language)}
-                options={[
-                  { value: "en", label: t.settingsPage.english },
-                  { value: "zh", label: t.settingsPage.chinese },
-                ]}
-              />
-            </Field>
-          </div>
-        </SettingsSection>
-
-        {/* AI Configuration */}
-        <SettingsSection
-          icon={<Bot className="h-4 w-4" />}
-          title={t.settingsPage.aiConfig}
-          description={t.settingsPage.aiConfigDesc}
-        >
-          {aiConfigs.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-bg-elevated/40 px-4 py-8 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Bot className="h-5 w-5 text-primary" />
-              </div>
-              <p className="text-sm text-text-secondary">
-                {t.settingsPage.aiConfigEmpty}
-              </p>
-              <button
-                type="button"
-                onClick={handleAddConfig}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" />
-                {t.settingsPage.aiAddConfig}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {aiConfigs.map((cfg) => (
-                <AiConfigCard
-                  key={cfg.id}
-                  config={cfg}
-                  isActive={cfg.id === activeAiConfigId}
-                  onSetActive={() => setActiveAiConfigId(cfg.id)}
-                  onUpdate={(patch) => updateAiConfigEntry(cfg.id, patch)}
-                  onRemove={() => removeAiConfigEntry(cfg.id)}
-                  inputClass={inputClass}
-                  language={language}
-                  labels={{
-                    setActive: t.settingsPage.aiSetActive,
-                    active: t.settingsPage.aiActive,
-                    configName: t.settingsPage.aiConfigName,
-                    apiEndpoint: t.settingsPage.apiEndpoint,
-                    apiKey: t.settingsPage.apiKey,
-                    modelName: t.settingsPage.modelName,
-                    apiEndpointPlaceholder: t.settingsPage.apiEndpointPlaceholder,
-                    apiKeyPlaceholder: t.settingsPage.apiKeyPlaceholder,
-                    modelPlaceholder: t.settingsPage.modelPlaceholder,
-                    delete: t.settingsPage.aiDeleteConfig,
-                    deleteConfirm: t.settingsPage.aiDeleteConfirm,
-                  }}
-                />
-              ))}
-              <button
-                type="button"
-                onClick={handleAddConfig}
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-bg-surface px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-primary hover:bg-bg-hover hover:text-text"
-              >
-                <Plus className="h-4 w-4" />
-                {t.settingsPage.aiAddConfig}
-              </button>
-            </div>
-          )}
-          <p className="mt-3 text-xs text-text-muted">{t.settingsPage.aiConfigHint}</p>
-        </SettingsSection>
-
-        {/* Display */}
-        <SettingsSection
-          icon={<Palette className="h-4 w-4" />}
-          title={t.settingsPage.display}
-          description={t.settingsPage.displayDesc}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ToggleRow
-              label={t.settingsPage.compactMode}
-              hint={t.settingsPage.compactModeHint}
-              checked={compactMode}
-              onChange={setCompactMode}
-            />
-            <ToggleRow
-              label={t.settingsPage.showPnlInPips}
-              hint={t.settingsPage.showPnlInPipsHint}
-              checked={showPnlInPips}
-              onChange={setShowPnlInPips}
-            />
-            <Field label={t.settingsPage.currencyDisplay}>
-              <Select
-                value={currency}
-                onChange={(v) => setCurrency(v as CurrencyCode)}
-                options={[
-                  { value: "USD", label: "USD ($)" },
-                  { value: "EUR", label: "EUR (€)" },
-                  { value: "GBP", label: "GBP (£)" },
-                  { value: "JPY", label: "JPY (¥)" },
-                  { value: "MYR", label: "MYR (RM)" },
-                ]}
-              />
-              <span className="text-xs text-text-muted">{t.settingsPage.currencyHint}</span>
-            </Field>
-          </div>
-        </SettingsSection>
-
-        {/* 经济日历偏好 - 用于 AI 周历汇总 */}
-        <SettingsSection
-          icon={<CalendarDays className="h-4 w-4" />}
-          title={language === "zh" ? "经济日历偏好" : "Economic Calendar Preferences"}
-          description={
-            language === "zh"
-              ? "在 AI 面板点击「本周经济日历」时,AI 会按下方配置生成结构化周历。"
-              : "Used by the AI Assistant's 'This Week's Calendar' quick action."
-          }
-        >
-          <CalendarPrefsEditor
-            prefs={calendarPrefs}
-            onChange={setCalendarPrefs}
-            language={language}
-          />
-        </SettingsSection>
-
-        {/* Local Data Backup & Recovery */}
-        <SettingsSection
-          icon={<Database className="h-4 w-4" />}
-          title={language === "zh" ? "本地数据备份与恢复" : "Local Data Backup & Recovery"}
-          description={
-            language === "zh"
-              ? "您可以导出当前所有数据的 JSON 备份文件，或上传备份文件来恢复数据。上传的备份数据將自动同步至云端数据库。"
-              : "Export a JSON backup of all your data, or upload a backup file to restore your data. Restored data will sync to the cloud database automatically."
-          }
-        >
-          {importError && (
-            <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span>{importError}</span>
-            </div>
-          )}
-          {importSuccess && (
-            <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
-              <FolderCheck className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                {language === "zh"
-                  ? "数据恢复成功！已更新本地状态。"
-                  : "Data restored successfully! Local state updated."}
-              </span>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Upload Data Button */}
-            <label className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 cursor-pointer">
-              <Upload className="h-4 w-4" />
-              {importing
-                ? (language === "zh" ? "正在导入..." : "Importing...")
-                : (language === "zh" ? "上传备份数据" : "Upload Backup Data")}
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportFile}
-                disabled={importing}
-                className="hidden"
-              />
-            </label>
-
-            {/* Export Data Button */}
+        {/* Tab Navigation */}
+        <div className="flex gap-1 rounded-lg border border-border bg-bg-surface p-1">
+          {([
+            { key: "account", label: language === "zh" ? "账户与同步" : "Account & Sync", icon: <RefreshCw className="h-3.5 w-3.5" /> },
+            { key: "general", label: language === "zh" ? "通用设置" : "General", icon: <SettingsIcon className="h-3.5 w-3.5" /> },
+            { key: "ai", label: language === "zh" ? "AI & 日历" : "AI & Calendar", icon: <Bot className="h-3.5 w-3.5" /> },
+            { key: "data", label: language === "zh" ? "数据管理" : "Data", icon: <Database className="h-3.5 w-3.5" /> },
+          ] as const).map((tab) => (
             <button
+              key={tab.key}
               type="button"
-              onClick={exportAllToFile}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                activeTab === tab.key
+                  ? "bg-primary/10 text-primary"
+                  : "text-text-muted hover:bg-bg-hover hover:text-text"
+              }`}
             >
-              <Download className="h-4 w-4" />
-              {language === "zh" ? "导出备份数据" : "Export Backup Data"}
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
             </button>
-          </div>
-        </SettingsSection>
+          ))}
+        </div>
 
-        {/* Supabase Cloud Sync */}
-        <SettingsSection
-          icon={<RefreshCw className="h-4 w-4" />}
-          title={language === "zh" ? "Supabase 云端账号同步" : "Supabase Cloud Sync"}
-          description={
-            language === "zh"
-              ? "使用 Supabase 用户认证与 Postgres 数据库，在手机与电脑之间多端同步你的交易日志。"
-              : "Sync your journal data between mobile and desktop devices using Supabase Auth & Postgres."
-          }
-        >
-          {syncError && (
-            <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span>{syncError}</span>
-            </div>
-          )}
-          {syncSuccess && (
-            <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
-              <FolderCheck className="h-3.5 w-3.5 shrink-0" />
-              <span>{syncStatusMsg}</span>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-4">
-            {/* Supabase Connection Status (Fully Private & Encrypted) */}
-            <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
-              <FolderCheck className="h-4 w-4 shrink-0" />
-              <span>
-                {language === "zh"
-                  ? "已加密内置云端数据库连接（安全保密）"
-                  : "Private Cloud Database Connected (Secure)"}
-              </span>
-            </div>
-
-            {/* Authentication Form / Logged in status */}
-            {supabaseSessionToken ? (
-              <div className="rounded-md border border-border bg-bg-surface/50 p-4">
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-xs text-text-muted block">
-                        {language === "zh" ? "已登录账号" : "Logged in as"}
+        {/* Tab Content */}
+        {activeTab === "account" && (
+          <>
+            {/* Profile Card */}
+            <SettingsSection
+              icon={<User className="h-4 w-4" />}
+              title={language === "zh" ? "个人资料" : "Profile"}
+              description={language === "zh" ? "管理你的头像和账号信息" : "Manage your avatar and account info"}
+            >
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-border bg-bg-elevated">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : supabaseUserEmail ? (
+                      <span className="flex h-full w-full items-center justify-center bg-primary/15 text-xl font-bold text-primary">
+                        {supabaseUserEmail[0].toUpperCase()}
                       </span>
-                      <span className="text-sm font-medium text-text">
-                        {supabaseUserEmail}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSignOut}
-                      className="rounded-md border border-loss/30 px-3 py-1.5 text-xs font-medium text-loss transition-colors hover:bg-loss/5"
-                    >
-                      {language === "zh" ? "退出登录" : "Logout"}
-                    </button>
+                    ) : (
+                      <User className="h-7 w-7 text-text-muted" />
+                    )}
                   </div>
-
-                  <div className="border-t border-border pt-3 mt-1">
-                    <ToggleRow
-                      label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
-                      hint={
-                        language === "zh"
-                          ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
-                          : "Automatically sync data to the cloud in the background when changes are made."
-                      }
-                      checked={syncEnabled}
-                      onChange={(val) => {
-                        useSettings.setState({ syncEnabled: val });
-                        if (val) {
-                          setTimeout(handleCloudSync, 100);
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Upload className="h-5 w-5 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 500 * 1024) {
+                          setSyncError(language === "zh" ? "头像文件不能超过 500KB" : "Avatar file must be under 500KB");
+                          return;
                         }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const result = ev.target?.result as string;
+                          useSettings.getState().setAvatarUrl(result);
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = "";
                       }}
                     />
+                  </label>
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-text">
+                    {supabaseUserEmail || (language === "zh" ? "未登录" : "Not logged in")}
                   </div>
-
-                  {syncEnabled && (
-                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 mt-1">
+                  <div className="mt-1 flex gap-2">
+                    {avatarUrl && (
                       <button
                         type="button"
-                        onClick={handleCloudSync}
-                        disabled={syncingCloud}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                        onClick={() => useSettings.getState().setAvatarUrl("")}
+                        className="text-[11px] text-text-muted transition-colors hover:text-loss"
                       >
-                        <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
-                        {language === "zh" ? "立即同步" : "Sync Now"}
+                        {language === "zh" ? "移除头像" : "Remove avatar"}
                       </button>
-                      {(lastSyncedAt || 0) > 0 && (
-                        <span className="text-xs text-text-muted">
-                          {language === "zh" ? "上次同步时间: " : "Last synced: "}
-                          {new Date(lastSyncedAt || 0).toLocaleString()}
-                        </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SettingsSection>
+
+            {/* Supabase Cloud Sync */}
+            <SettingsSection
+              icon={<RefreshCw className="h-4 w-4" />}
+              title={language === "zh" ? "Supabase 云端账号同步" : "Supabase Cloud Sync"}
+              description={
+                language === "zh"
+                  ? "使用 Supabase 用户认证与 Postgres 数据库，在手机与电脑之间多端同步你的交易日志。"
+                  : "Sync your journal data between mobile and desktop devices using Supabase Auth & Postgres."
+              }
+            >
+              {syncError && (
+                <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{syncError}</span>
+                </div>
+              )}
+              {syncSuccess && (
+                <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+                  <FolderCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span>{syncStatusMsg}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-4">
+                {/* Supabase Connection Status (Fully Private & Encrypted) */}
+                <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary font-medium">
+                  <FolderCheck className="h-4 w-4 shrink-0" />
+                  <span>
+                    {language === "zh"
+                      ? "已加密内置云端数据库连接（安全保密）"
+                      : "Private Cloud Database Connected (Secure)"}
+                  </span>
+                </div>
+
+                {/* Authentication Form / Logged in status */}
+                {supabaseSessionToken ? (
+                  <div className="rounded-md border border-border bg-bg-surface/50 p-4">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs text-text-muted block">
+                            {language === "zh" ? "已登录账号" : "Logged in as"}
+                          </span>
+                          <span className="text-sm font-medium text-text">
+                            {supabaseUserEmail}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSignOut}
+                          className="rounded-md border border-loss/30 px-3 py-1.5 text-xs font-medium text-loss transition-colors hover:bg-loss/5"
+                        >
+                          {language === "zh" ? "退出登录" : "Logout"}
+                        </button>
+                      </div>
+
+                      <div className="border-t border-border pt-3 mt-1">
+                        <ToggleRow
+                          label={language === "zh" ? "启用云同步" : "Enable Cloud Sync"}
+                          hint={
+                            language === "zh"
+                              ? "开启后，本设备发生数据修改时会自动与云端进行静默同步。"
+                              : "Automatically sync data to the cloud in the background when changes are made."
+                          }
+                          checked={syncEnabled}
+                          onChange={(val) => {
+                            useSettings.setState({ syncEnabled: val });
+                            if (val) {
+                              setTimeout(handleCloudSync, 100);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {syncEnabled && (
+                        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 mt-1">
+                          <button
+                            type="button"
+                            onClick={handleCloudSync}
+                            disabled={syncingCloud}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${syncingCloud ? "animate-spin" : ""}`} />
+                            {language === "zh" ? "立即同步" : "Sync Now"}
+                          </button>
+                          {(lastSyncedAt || 0) > 0 && (
+                            <span className="text-xs text-text-muted">
+                              {language === "zh" ? "上次同步时间: " : "Last synced: "}
+                              {new Date(lastSyncedAt || 0).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Device List */}
-                <div className="border-t border-border pt-3 mt-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-text-secondary">
-                      {language === "zh" ? "已登录设备" : "Active Devices"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleLoadDevices}
-                      disabled={loadingDevices}
-                      className="text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
-                    >
-                      {loadingDevices
-                        ? (language === "zh" ? "加载中..." : "Loading...")
-                        : (language === "zh" ? "刷新" : "Refresh")}
-                    </button>
-                  </div>
-                  {devices.length === 0 ? (
-                    <p className="text-xs text-text-muted py-2">
-                      {language === "zh" ? "暂无设备记录" : "No device records"}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {devices.map((device) => {
-                        const isCurrent = device.isCurrent;
-                        const timeAgo = getTimeAgo(device.last_seen, language);
-                        return (
-                          <div
-                            key={device.id}
-                            className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
-                              isCurrent
-                                ? "border-primary/30 bg-primary/5"
-                                : "border-border bg-bg-elevated"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Monitor className="h-4 w-4 shrink-0 text-text-muted" />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-text truncate">
-                                    {device.device_name}
-                                  </span>
-                                  {isCurrent && (
-                                    <span className="shrink-0 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                      {language === "zh" ? "当前设备" : "This device"}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-text-muted">
-                                  {device.browser} · {device.os} · {timeAgo}
-                                </span>
-                              </div>
-                            </div>
-                            {!isCurrent && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const ok = await useDialogStore.getState().confirm({
-                                    message: language === "zh"
-                                      ? `确定将此设备「${device.device_name}」退出登录？`
-                                      : `Remove this device "${device.device_name}" from active sessions?`,
-                                    variant: "warning",
-                                  });
-                                  if (ok) handleRemoveDevice(device.id);
-                                }}
-                                className="ml-2 shrink-0 rounded-sm p-1.5 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
-                                title={language === "zh" ? "移除此设备" : "Remove device"}
+                    {/* Device List */}
+                    <div className="border-t border-border pt-3 mt-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-text-secondary">
+                          {language === "zh" ? "已登录设备" : "Active Devices"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleLoadDevices}
+                          disabled={loadingDevices}
+                          className="text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
+                        >
+                          {loadingDevices
+                            ? (language === "zh" ? "加载中..." : "Loading...")
+                            : (language === "zh" ? "刷新" : "Refresh")}
+                        </button>
+                      </div>
+                      {devices.length === 0 ? (
+                        <p className="text-xs text-text-muted py-2">
+                          {language === "zh" ? "暂无设备记录" : "No device records"}
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {devices.map((device) => {
+                            const isCurrent = device.isCurrent;
+                            const timeAgo = getTimeAgo(device.last_seen, language);
+                            return (
+                              <div
+                                key={device.id}
+                                className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
+                                  isCurrent
+                                    ? "border-primary/30 bg-primary/5"
+                                    : "border-border bg-bg-elevated"
+                                }`}
                               >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <Monitor className="h-4 w-4 shrink-0 text-text-muted" />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium text-text truncate">
+                                        {device.device_name}
+                                      </span>
+                                      {isCurrent && (
+                                        <span className="shrink-0 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                          {language === "zh" ? "当前设备" : "This device"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[11px] text-text-muted">
+                                      {device.browser} · {device.os} · {timeAgo}
+                                    </span>
+                                  </div>
+                                </div>
+                                {!isCurrent && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const ok = await useDialogStore.getState().confirm({
+                                        message: language === "zh"
+                                          ? `确定将此设备「${device.device_name}」退出登录？`
+                                          : `Remove this device "${device.device_name}" from active sessions?`,
+                                        variant: "warning",
+                                      });
+                                      if (ok) handleRemoveDevice(device.id);
+                                    }}
+                                    className="ml-2 shrink-0 rounded-sm p-1.5 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
+                                    title={language === "zh" ? "移除此设备" : "Remove device"}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-border bg-bg-surface/50 p-4">
-                <div className="mb-4 border-b border-border pb-2 flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode("login"); setSyncError(""); }}
-                    className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "login" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
-                  >
-                    {language === "zh" ? "账号登录" : "Login"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode("register"); setSyncError(""); }}
-                    className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "register" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
-                  >
-                    {language === "zh" ? "注册新账号" : "Register"}
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <Field label={language === "zh" ? "邮箱" : "Email"}>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com"
-                      className={inputClass}
-                      disabled={!supabaseUrl || !supabaseAnonKey}
-                    />
-                  </Field>
-                  <Field label={language === "zh" ? "密码" : "Password"}>
-                    <div className="relative flex items-center">
-                      <input
-                        type={showSupabasePassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className={`${inputClass} pr-10`}
-                        disabled={!supabaseUrl || !supabaseAnonKey}
-                      />
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border bg-bg-surface/50 p-4">
+                    <div className="mb-4 border-b border-border pb-2 flex gap-4">
                       <button
                         type="button"
-                        onClick={() => setShowSupabasePassword(!showSupabasePassword)}
-                        className="absolute right-3 text-text-muted hover:text-text"
+                        onClick={() => { setAuthMode("login"); setSyncError(""); }}
+                        className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "login" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
                       >
-                        {showSupabasePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {language === "zh" ? "账号登录" : "Login"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode("register"); setSyncError(""); }}
+                        className={`text-sm pb-2 font-medium border-b-2 transition-all ${authMode === "register" ? "border-primary text-primary" : "border-transparent text-text-muted"}`}
+                      >
+                        {language === "zh" ? "注册新账号" : "Register"}
                       </button>
                     </div>
-                  </Field>
 
+                    <div className="flex flex-col gap-3">
+                      <Field label={language === "zh" ? "邮箱" : "Email"}>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="name@example.com"
+                          className={inputClass}
+                          disabled={!supabaseUrl || !supabaseAnonKey}
+                        />
+                      </Field>
+                      <Field label={language === "zh" ? "密码" : "Password"}>
+                        <div className="relative flex items-center">
+                          <input
+                            type={showSupabasePassword ? "text" : "password"}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className={`${inputClass} pr-10`}
+                            disabled={!supabaseUrl || !supabaseAnonKey}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSupabasePassword(!showSupabasePassword)}
+                            className="absolute right-3 text-text-muted hover:text-text"
+                          >
+                            {showSupabasePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </Field>
+
+                      <button
+                        type="button"
+                        onClick={handleAuth}
+                        disabled={authenticating || !supabaseUrl || !supabaseAnonKey}
+                        className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 mt-2"
+                      >
+                        {authenticating ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                        {authMode === "login"
+                          ? (language === "zh" ? "登 录" : "Log In")
+                          : (language === "zh" ? "注 册" : "Sign Up")}
+                      </button>
+
+                      {(!supabaseUrl || !supabaseAnonKey) && (
+                        <p className="text-xs text-warning mt-1">
+                          {language === "zh" ? "⚠️ 请先在上方配置 Supabase URL 与 Anon Key 凭证才能登录。" : "⚠️ Please enter your Supabase URL & Anon Key credentials first."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SettingsSection>
+
+            {/* Local Data Backup & Recovery */}
+            <SettingsSection
+              icon={<Database className="h-4 w-4" />}
+              title={language === "zh" ? "本地数据备份与恢复" : "Local Data Backup & Recovery"}
+              description={
+                language === "zh"
+                  ? "您可以导出当前所有数据的 JSON 备份文件，或上传备份文件来恢复数据。上传的备份数据將自动同步至云端数据库。"
+                  : "Export a JSON backup of all your data, or upload a backup file to restore your data. Restored data will sync to the cloud database automatically."
+              }
+            >
+              {importError && (
+                <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+              {importSuccess && (
+                <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+                  <FolderCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {language === "zh"
+                      ? "数据恢复成功！已更新本地状态。"
+                      : "Data restored successfully! Local state updated."}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Upload Data Button */}
+                <label className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 cursor-pointer">
+                  <Upload className="h-4 w-4" />
+                  {importing
+                    ? (language === "zh" ? "正在导入..." : "Importing...")
+                    : (language === "zh" ? "上传备份数据" : "Upload Backup Data")}
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportFile}
+                    disabled={importing}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* Export Data Button */}
+                <button
+                  type="button"
+                  onClick={exportAllToFile}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+                >
+                  <Download className="h-4 w-4" />
+                  {language === "zh" ? "导出备份数据" : "Export Backup Data"}
+                </button>
+              </div>
+            </SettingsSection>
+          </>
+        )}
+        {activeTab === "general" && (
+          <>
+            {/* Preferences */}
+            <SettingsSection
+              icon={<SettingsIcon className="h-4 w-4" />}
+              title={t.settingsPage.preferences}
+              description={t.settingsPage.preferencesDesc}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label={t.settingsPage.defaultAccount}>
+                  <Select
+                    value={defaultAccount}
+                    onChange={setDefaultAccount}
+                    options={accounts.map((a) => ({ value: a.id, label: `${a.name} — ${a.broker}` }))}
+                  />
+                </Field>
+                <Field label={t.settingsPage.dateFormat}>
+                  <Select
+                    value={dateFormat}
+                    onChange={setDateFormat}
+                    options={[
+                      { value: "MMM DD, YYYY", label: "MMM DD, YYYY" },
+                      { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
+                      { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
+                    ]}
+                  />
+                </Field>
+                <Field label={t.settingsPage.tradesPerPage}>
+                  <Select
+                    value={tradesPerPage}
+                    onChange={setTradesPerPage}
+                    options={[
+                      { value: "10", label: "10" },
+                      { value: "25", label: "25" },
+                      { value: "50", label: "50" },
+                    ]}
+                  />
+                </Field>
+                <Field label={t.settingsPage.language}>
+                  <Select
+                    value={language}
+                    onChange={(v) => setLanguage(v as Language)}
+                    options={[
+                      { value: "en", label: t.settingsPage.english },
+                      { value: "zh", label: t.settingsPage.chinese },
+                    ]}
+                  />
+                </Field>
+              </div>
+            </SettingsSection>
+
+            {/* Display */}
+            <SettingsSection
+              icon={<Palette className="h-4 w-4" />}
+              title={t.settingsPage.display}
+              description={t.settingsPage.displayDesc}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ToggleRow
+                  label={t.settingsPage.compactMode}
+                  hint={t.settingsPage.compactModeHint}
+                  checked={compactMode}
+                  onChange={setCompactMode}
+                />
+                <ToggleRow
+                  label={t.settingsPage.showPnlInPips}
+                  hint={t.settingsPage.showPnlInPipsHint}
+                  checked={showPnlInPips}
+                  onChange={setShowPnlInPips}
+                />
+                <Field label={t.settingsPage.currencyDisplay}>
+                  <Select
+                    value={currency}
+                    onChange={(v) => setCurrency(v as CurrencyCode)}
+                    options={[
+                      { value: "USD", label: "USD ($)" },
+                      { value: "EUR", label: "EUR (€)" },
+                      { value: "GBP", label: "GBP (£)" },
+                      { value: "JPY", label: "JPY (¥)" },
+                      { value: "MYR", label: "MYR (RM)" },
+                    ]}
+                  />
+                  <span className="text-xs text-text-muted">{t.settingsPage.currencyHint}</span>
+                </Field>
+              </div>
+            </SettingsSection>
+          </>
+        )}
+        {activeTab === "ai" && (
+          <>
+            {/* AI Configuration */}
+            <SettingsSection
+              icon={<Bot className="h-4 w-4" />}
+              title={t.settingsPage.aiConfig}
+              description={t.settingsPage.aiConfigDesc}
+            >
+              {aiConfigs.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-bg-elevated/40 px-4 py-8 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                    <Bot className="h-5 w-5 text-primary" />
+                  </div>
+                  <p className="text-sm text-text-secondary">
+                    {t.settingsPage.aiConfigEmpty}
+                  </p>
                   <button
                     type="button"
-                    onClick={handleAuth}
-                    disabled={authenticating || !supabaseUrl || !supabaseAnonKey}
-                    className="w-full justify-center inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50 mt-2"
+                    onClick={handleAddConfig}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >
-                    {authenticating ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
-                    {authMode === "login"
-                      ? (language === "zh" ? "登 录" : "Log In")
-                      : (language === "zh" ? "注 册" : "Sign Up")}
+                    <Plus className="h-4 w-4" />
+                    {t.settingsPage.aiAddConfig}
                   </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {aiConfigs.map((cfg) => (
+                    <AiConfigCard
+                      key={cfg.id}
+                      config={cfg}
+                      isActive={cfg.id === activeAiConfigId}
+                      onSetActive={() => setActiveAiConfigId(cfg.id)}
+                      onUpdate={(patch) => updateAiConfigEntry(cfg.id, patch)}
+                      onRemove={() => removeAiConfigEntry(cfg.id)}
+                      inputClass={inputClass}
+                      language={language}
+                      labels={{
+                        setActive: t.settingsPage.aiSetActive,
+                        active: t.settingsPage.aiActive,
+                        configName: t.settingsPage.aiConfigName,
+                        apiEndpoint: t.settingsPage.apiEndpoint,
+                        apiKey: t.settingsPage.apiKey,
+                        modelName: t.settingsPage.modelName,
+                        apiEndpointPlaceholder: t.settingsPage.apiEndpointPlaceholder,
+                        apiKeyPlaceholder: t.settingsPage.apiKeyPlaceholder,
+                        modelPlaceholder: t.settingsPage.modelPlaceholder,
+                        delete: t.settingsPage.aiDeleteConfig,
+                        deleteConfirm: t.settingsPage.aiDeleteConfirm,
+                      }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleAddConfig}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-bg-surface px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-primary hover:bg-bg-hover hover:text-text"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t.settingsPage.aiAddConfig}
+                  </button>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-text-muted">{t.settingsPage.aiConfigHint}</p>
+            </SettingsSection>
 
-                  {(!supabaseUrl || !supabaseAnonKey) && (
-                    <p className="text-xs text-warning mt-1">
-                      {language === "zh" ? "⚠️ 请先在上方配置 Supabase URL 与 Anon Key 凭证才能登录。" : "⚠️ Please enter your Supabase URL & Anon Key credentials first."}
-                    </p>
-                  )}
+            {/* 经济日历偏好 - 用于 AI 周历汇总 */}
+            <SettingsSection
+              icon={<CalendarDays className="h-4 w-4" />}
+              title={language === "zh" ? "经济日历偏好" : "Economic Calendar Preferences"}
+              description={
+                language === "zh"
+                  ? "在 AI 面板点击「本周经济日历」时,AI 会按下方配置生成结构化周历。"
+                  : "Used by the AI Assistant's 'This Week's Calendar' quick action."
+              }
+            >
+              <CalendarPrefsEditor
+                prefs={calendarPrefs}
+                onChange={setCalendarPrefs}
+                language={language}
+              />
+            </SettingsSection>
+          </>
+        )}
+        {activeTab === "data" && (
+          <>
+            {/* Data Management */}
+            <SettingsSection
+              icon={<Database className="h-4 w-4" />}
+              title={t.settingsPage.dataManagement}
+              description={t.settingsPage.dataManagementDesc}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button type="button" className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover">
+                  <Download className="h-4 w-4" />
+                  {t.settingsPage.exportCsv}
+                </button>
+                <button type="button" className="inline-flex items-center justify-center gap-2 rounded-md border border-loss/30 bg-loss/8 px-4 py-2 text-sm font-medium text-loss transition-colors hover:bg-loss/14">
+                  <Trash2 className="h-4 w-4" />
+                  {t.settingsPage.clearAllTrades}
+                </button>
+              </div>
+            </SettingsSection>
+
+            {/* About */}
+            <SettingsSection
+              icon={<Info className="h-4 w-4" />}
+              title={t.settingsPage.about}
+              description={t.settingsPage.aboutDesc}
+            >
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">{t.settingsPage.application}</span>
+                  <span className="font-medium text-text">Trading Journal</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">{t.settingsPage.version}</span>
+                  <span className="tj-number font-medium text-text">1.0.0</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">{t.settingsPage.build}</span>
+                  <span className="tj-number font-medium text-text">2026.06.30</span>
                 </div>
               </div>
-            )}
-          </div>
-        </SettingsSection>
-
-        {/* Data Management */}
-        <SettingsSection
-          icon={<Database className="h-4 w-4" />}
-          title={t.settingsPage.dataManagement}
-          description={t.settingsPage.dataManagementDesc}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover">
-              <Download className="h-4 w-4" />
-              {t.settingsPage.exportCsv}
-            </button>
-            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-md border border-loss/30 bg-loss/8 px-4 py-2 text-sm font-medium text-loss transition-colors hover:bg-loss/14">
-              <Trash2 className="h-4 w-4" />
-              {t.settingsPage.clearAllTrades}
-            </button>
-          </div>
-        </SettingsSection>
-
-        {/* About */}
-        <SettingsSection
-          icon={<Info className="h-4 w-4" />}
-          title={t.settingsPage.about}
-          description={t.settingsPage.aboutDesc}
-        >
-          <div className="flex flex-col gap-1 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-text-secondary">{t.settingsPage.application}</span>
-              <span className="font-medium text-text">Trading Journal</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-text-secondary">{t.settingsPage.version}</span>
-              <span className="tj-number font-medium text-text">1.0.0</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-text-secondary">{t.settingsPage.build}</span>
-              <span className="tj-number font-medium text-text">2026.06.30</span>
-            </div>
-          </div>
-        </SettingsSection>
+            </SettingsSection>
+          </>
+        )}
       </div>
 
       {/* 文件夹浏览弹窗 */}
