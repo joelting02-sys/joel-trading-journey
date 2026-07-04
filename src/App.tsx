@@ -14,6 +14,7 @@ import EconomicCalendar from "@/pages/EconomicCalendar";
 import PositionCalculator from "@/pages/PositionCalculator";
 import TradeDetail from "@/pages/TradeDetail";
 import Backtest from "@/pages/Backtest";
+import ChartReview from "@/pages/ChartReview";
 import { tryRestoreDirectory } from "@/services/dataStorage";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/position-calc" element={<PositionCalculator />} />
           <Route path="/sop" element={<Sop />} />
           <Route path="/backtest" element={<Backtest />} />
+          <Route path="/chart-review" element={<ChartReview />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Router>

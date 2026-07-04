@@ -13,6 +13,7 @@ export const translations = {
       calendar: "Economic Calendar",
       preMarket: "Pre-Market",
       backtest: "Backtest",
+      chartReview: "Chart Review",
       positionCalc: "Position Calc",
       sop: "SOP",
       settings: "Settings",
@@ -27,6 +28,7 @@ export const translations = {
       assistant: "AI Assistant",
       calendar: "Economic Calendar",
       backtest: "Backtest",
+      chartReview: "Chart Review",
       preMarket: "Pre-Market Checklist",
       positionCalc: "Position Calculator",
       sop: "SOP",
@@ -335,6 +337,7 @@ export const translations = {
       assistant: "AI 助手",
       calendar: "经济日历",
       backtest: "回测",
+      chartReview: "图表复盘",
       preMarket: "盘前清单",
       positionCalc: "仓位计算",
       sop: "SOP",
@@ -349,6 +352,7 @@ export const translations = {
       assistant: "AI 助手",
       calendar: "经济日历",
       backtest: "策略回测",
+      chartReview: "图表复盘",
       preMarket: "开盘前清单",
       positionCalc: "仓位计算器",
       sop: "SOP",
@@ -650,6 +654,7 @@ export type TranslationKeys = {
     assistant: string;
     calendar: string;
     backtest: string;
+    chartReview: string;
     preMarket: string;
     positionCalc: string;
     sop: string;
@@ -664,6 +669,7 @@ export type TranslationKeys = {
     assistant: string;
     calendar: string;
     backtest: string;
+    chartReview: string;
     preMarket: string;
     positionCalc: string;
     sop: string;

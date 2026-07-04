@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   Calculator,
   History,
+  BarChart3,
   Settings as SettingsIcon,
   X,
 } from "lucide-react";
@@ -31,6 +32,7 @@ export default function Sidebar() {
     { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: Bot },
     { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
     { key: "backtest", label: t.nav.backtest, path: "/backtest", icon: History },
+    { key: "chart-review", label: t.nav.chartReview, path: "/chart-review", icon: BarChart3 },
     { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
     { key: "sop", label: t.nav.sop, path: "/sop", icon: ClipboardList },
   ];
