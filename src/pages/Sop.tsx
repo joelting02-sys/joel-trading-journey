@@ -51,7 +51,11 @@ export default function Sop() {
 
   useEffect(() => {
     if (!setDropdownOpen) return;
-    const close = () => setSetDropdownOpen(false);
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("[data-sop-dropdown]")) return;
+      setSetDropdownOpen(false);
+    };
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [setDropdownOpen]);
