@@ -5,6 +5,7 @@ import { translations } from "@/i18n/translations";
 import type {
   AiConfig,
   AiConfigEntry,
+  SopSet,
   SopRule,
   ChatMessage,
   SopProposal,
@@ -118,6 +119,16 @@ function getDefaultSopRules(lang: Language): SopRule[] {
   return lang === "zh" ? defaultSopRulesZh : defaultSopRulesEn;
 }
 
+function buildDefaultSopSet(lang: Language): SopSet {
+  return {
+    id: "sop-default",
+    name: lang === "zh" ? "默认 SOP" : "Default SOP",
+    rules: getDefaultSopRules(lang),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
 // 旧版英文默认规则的 ID 列表,用于判断是否需要迁移
 const oldDefaultRuleIds = ["sop1", "sop2", "sop3", "sop4", "sop5", "sop6"];
 
@@ -128,13 +139,23 @@ export function getActiveAiConfig(state: { aiConfigs: AiConfigEntry[]; activeAiC
   return { endpoint: entry.endpoint, apiKey: entry.apiKey, model: entry.model };
 }
 
+export function getActiveSopRules(state: { sopSets: SopSet[]; activeSopSetId: string }): SopRule[] {
+  const set = state.sopSets.find((s) => s.id === state.activeSopSetId);
+  return set ? set.rules : state.sopSets[0]?.rules ?? [];
+}
+
+export function getSopSetById(state: { sopSets: SopSet[] }, id: string): SopSet | undefined {
+  return state.sopSets.find((s) => s.id === id);
+}
+
 interface SettingsStore {
   language: Language;
   currency: CurrencyCode;
   // 多 AI 配置(替代旧版单一 aiConfig)
   aiConfigs: AiConfigEntry[];
   activeAiConfigId: string;
-  sopRules: SopRule[];
+  sopSets: SopSet[];
+  activeSopSetId: string;
   chatMessages: ChatMessage[];
   // 经济日历偏好
   calendarPrefs: CalendarPreferences;
@@ -162,6 +183,11 @@ interface SettingsStore {
   updateAiConfigEntry: (id: string, patch: Partial<Omit<AiConfigEntry, "id">>) => void;
   removeAiConfigEntry: (id: string) => void;
   setActiveAiConfigId: (id: string) => void;
+  setSopSets: (sets: SopSet[]) => void;
+  setActiveSopSetId: (id: string) => void;
+  addSopSet: (set: SopSet) => void;
+  renameSopSet: (id: string, name: string) => void;
+  deleteSopSet: (id: string) => void;
   setSopRules: (rules: SopRule[]) => void;
   setChatMessages: (msgs: ChatMessage[]) => void;
   addSopRule: (rule: SopRule) => void;
@@ -200,7 +226,7 @@ const settingsDualStorage: PersistStorage<SettingsStore> = {
     localStorage.setItem(name, JSON.stringify(value));
     if (getLocation() === "filesystem" && value.state) {
       const s = value.state;
-      if (s.sopRules !== undefined) saveSopToDisk(s.sopRules).catch(() => {});
+      if (s.sopSets !== undefined) saveSopToDisk(s.sopSets).catch(() => {});
       // settings 包含 language/currency/aiConfigs/calendarPrefs,统一存一份
       const settings = {
         language: s.language,
@@ -227,7 +253,8 @@ export const useSettings = create<SettingsStore>()(
       currency: "USD",
       aiConfigs: [],
       activeAiConfigId: "",
-      sopRules: getDefaultSopRules("en"),
+      sopSets: [buildDefaultSopSet("en")],
+      activeSopSetId: "sop-default",
       chatMessages: [],
       calendarPrefs: defaultCalendarPrefs,
       calendarContent: "",
@@ -252,13 +279,16 @@ export const useSettings = create<SettingsStore>()(
 
       setLanguage: (lang) => {
         set((state) => {
-          // 如果当前仍为默认规则,切换语言时同步替换为对应语言版本
+          const activeSet = state.sopSets.find((s) => s.id === state.activeSopSetId);
+          if (!activeSet) return { language: lang };
           const isDefault =
-            state.sopRules.length === oldDefaultRuleIds.length &&
-            state.sopRules.every((r) => oldDefaultRuleIds.includes(r.id));
+            activeSet.rules.length === oldDefaultRuleIds.length &&
+            activeSet.rules.every((r) => oldDefaultRuleIds.includes(r.id));
+          if (!isDefault) return { language: lang };
+          const updatedSet = { ...activeSet, rules: getDefaultSopRules(lang), name: lang === "zh" ? "默认 SOP" : "Default SOP", updatedAt: Date.now() };
           return {
             language: lang,
-            ...(isDefault ? { sopRules: getDefaultSopRules(lang) } : {}),
+            sopSets: state.sopSets.map((s) => (s.id === updatedSet.id ? updatedSet : s)),
           };
         });
         onDataMutation();
@@ -300,27 +330,71 @@ export const useSettings = create<SettingsStore>()(
         onDataMutation();
       },
       // =========================================================
-      setSopRules: (sopRules) => set({ sopRules }),
+      setSopSets: (sopSets) => set({ sopSets }),
+      setActiveSopSetId: (id) => {
+        set({ activeSopSetId: id });
+        onDataMutation();
+      },
+      addSopSet: (sopSet) => {
+        set((state) => ({ sopSets: [...state.sopSets, sopSet] }));
+        onDataMutation();
+      },
+      renameSopSet: (id, name) => {
+        set((state) => ({
+          sopSets: state.sopSets.map((s) => (s.id === id ? { ...s, name, updatedAt: Date.now() } : s)),
+        }));
+        onDataMutation();
+      },
+      deleteSopSet: (id) => {
+        set((state) => {
+          if (state.sopSets.length <= 1) return state;
+          const next = state.sopSets.filter((s) => s.id !== id);
+          const activeSopSetId = state.activeSopSetId === id ? next[0]?.id ?? "" : state.activeSopSetId;
+          return { sopSets: next, activeSopSetId };
+        });
+        onDataMutation();
+      },
+      setSopRules: (rules) => {
+        set((state) => ({
+          sopSets: state.sopSets.map((s) =>
+            s.id === state.activeSopSetId ? { ...s, rules, updatedAt: Date.now() } : s
+          ),
+        }));
+      },
       setChatMessages: (chatMessages) => set({ chatMessages }),
       addSopRule: (rule) => {
-        set((state) => ({ sopRules: [...state.sopRules, rule] }));
+        set((state) => ({
+          sopSets: state.sopSets.map((s) =>
+            s.id === state.activeSopSetId ? { ...s, rules: [...s.rules, rule], updatedAt: Date.now() } : s
+          ),
+        }));
         onDataMutation();
       },
       updateSopRule: (rule) => {
         set((state) => ({
-          sopRules: state.sopRules.map((r) => (r.id === rule.id ? rule : r)),
+          sopSets: state.sopSets.map((s) =>
+            s.id === state.activeSopSetId
+              ? { ...s, rules: s.rules.map((r) => (r.id === rule.id ? rule : r)), updatedAt: Date.now() }
+              : s
+          ),
         }));
         onDataMutation();
       },
       deleteSopRule: (id) => {
-        set((state) => ({ sopRules: state.sopRules.filter((r) => r.id !== id) }));
+        set((state) => ({
+          sopSets: state.sopSets.map((s) =>
+            s.id === state.activeSopSetId
+              ? { ...s, rules: s.rules.filter((r) => r.id !== id), updatedAt: Date.now() }
+              : s
+          ),
+        }));
         onDataMutation();
       },
-      // 一次性应用多个 AI 提议(按 add / update / remove 顺序处理)
       applySopProposals: (proposals) => {
         set((state) => {
-          let rules = [...state.sopRules];
-          // AI 提议的 category 可能为 "general",映射到 SopCategory(用 psychology 兜底)
+          const activeSet = state.sopSets.find((s) => s.id === state.activeSopSetId);
+          if (!activeSet) return state;
+          let rules = [...activeSet.rules];
           const toCategory = (c: SopProposal["category"]): SopRule["category"] => {
             if (c === "entry" || c === "exit" || c === "risk" || c === "psychology") return c;
             return "psychology";
@@ -344,7 +418,11 @@ export const useSettings = create<SettingsStore>()(
               rules = rules.filter((r) => r.id !== p.ruleId);
             }
           }
-          return { sopRules: rules };
+          return {
+            sopSets: state.sopSets.map((s) =>
+              s.id === state.activeSopSetId ? { ...s, rules, updatedAt: Date.now() } : s
+            ),
+          };
         });
         onDataMutation();
       },
@@ -381,12 +459,22 @@ export const useSettings = create<SettingsStore>()(
 
       // 从磁盘读取真实数据(覆盖 localStorage 旧值)
       hydrateFromDisk: async () => {
-        const [sopRules, settings] = await Promise.all([
-          loadSopFromDisk<SopRule[] | null>(null),
-          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[] } | null>(null),
+        const [sopData, settings] = await Promise.all([
+          loadSopFromDisk<SopRule[] | SopSet[] | null>(null),
+          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[]; sopSets?: SopSet[]; activeSopSetId?: string } | null>(null),
         ]);
-        if (sopRules && sopRules.length > 0) set({ sopRules });
+        if (sopData && sopData.length > 0) {
+          const first = sopData[0] as SopRule | SopSet;
+          if ("rules" in first && Array.isArray((first as SopSet).rules)) {
+            const loadedSets = sopData as SopSet[];
+            set({ sopSets: loadedSets });
+          } else {
+            set({ sopSets: [{ id: "sop-default", name: "Default SOP", rules: sopData as SopRule[], createdAt: Date.now(), updatedAt: Date.now() }] });
+          }
+        }
         if (settings) {
+          if (settings.sopSets && settings.sopSets.length > 0) set({ sopSets: settings.sopSets });
+          if (settings.activeSopSetId) set({ activeSopSetId: settings.activeSopSetId });
           if (settings.language) set({ language: settings.language });
           if (settings.currency) set({ currency: settings.currency as CurrencyCode });
           if (settings.aiConfigs) set({ aiConfigs: settings.aiConfigs });
@@ -402,14 +490,15 @@ export const useSettings = create<SettingsStore>()(
     {
       name: "tj-settings-store",
       storage: settingsDualStorage,
-      version: 7,
+      version: 8,
       // 持久化配置和聊天记录(聊天图片已压缩,不会超限)
       partialize: ((state: SettingsStore) => ({
         language: state.language,
         currency: state.currency,
         aiConfigs: state.aiConfigs,
         activeAiConfigId: state.activeAiConfigId,
-        sopRules: state.sopRules,
+        sopSets: state.sopSets,
+        activeSopSetId: state.activeSopSetId,
         chatMessages: state.chatMessages,
         calendarPrefs: state.calendarPrefs,
         calendarContent: state.calendarContent,
@@ -425,7 +514,7 @@ export const useSettings = create<SettingsStore>()(
         clientUpdatedAt: state.clientUpdatedAt,
       })) as (state: SettingsStore) => SettingsStore,
       migrate: ((persistedState: unknown, version: number) => {
-        const s = persistedState as Partial<SettingsStore> & { aiConfig?: AiConfig; syncPasscode?: string };
+        const s = persistedState as Partial<SettingsStore> & { aiConfig?: AiConfig; syncPasscode?: string; sopRules?: SopRule[] };
         // 从 v1 迁移: 如果用户仍在使用旧版英文默认规则,替换为当前语言的版本
         if (version < 2 && s.sopRules && s.language) {
           const isOldDefault =
@@ -479,6 +568,17 @@ export const useSettings = create<SettingsStore>()(
           if (s.syncPasscode) {
             delete s.syncPasscode;
           }
+        }
+        // v7→v8: sopRules → sopSets + activeSopSetId
+        if (version < 8) {
+          const oldRules = (s as Record<string, unknown>).sopRules as SopRule[] | undefined;
+          if (Array.isArray(oldRules) && oldRules.length > 0) {
+            s.sopSets = [{ id: "sop-default", name: "Default SOP", rules: oldRules, createdAt: Date.now(), updatedAt: Date.now() }];
+          } else if (!s.sopSets) {
+            s.sopSets = [buildDefaultSopSet((s.language as Language) || "en")];
+          }
+          s.activeSopSetId = "sop-default";
+          delete (s as Record<string, unknown>).sopRules;
         }
         return s as unknown as SettingsStore;
       }) as (persistedState: unknown, version: number) => SettingsStore,

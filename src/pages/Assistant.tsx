@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Layout from "@/components/Layout";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, getActiveSopRules } from "@/store/useSettings";
 import { useTradeStore } from "@/store/useTradeStore";
 import {
   sendChatWithImages,
@@ -54,7 +54,9 @@ export default function Assistant() {
   const aiConfigs = useSettings((s) => s.aiConfigs);
   const activeAiConfigId = useSettings((s) => s.activeAiConfigId);
   const setActiveAiConfigId = useSettings((s) => s.setActiveAiConfigId);
-  const sopRules = useSettings((s) => s.sopRules);
+  const sopSets = useSettings((s) => s.sopSets);
+  const activeSopSetId = useSettings((s) => s.activeSopSetId);
+  const sopRules = getActiveSopRules({ sopSets, activeSopSetId });
   const chatMessages = useSettings((s) => s.chatMessages);
   const addChatMessage = useSettings((s) => s.addChatMessage);
   const clearChatMessages = useSettings((s) => s.clearChatMessages);

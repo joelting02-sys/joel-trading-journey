@@ -3,11 +3,11 @@ import { Wallet, TrendingUp, TrendingDown, Check, Pencil, Trash2, Plus, X, Chevr
 import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, getSopSetById } from "@/store/useSettings";
 import { formatCurrencyConverted, formatSignedCurrencyConverted } from "@/utils/currency";
 import { calcAccountEquity } from "@/utils/tradeMetrics";
 import { evaluatePropFirm } from "@/utils/propFirm";
-import type { Account, PropFirmChallenge, Trade } from "@/types";
+import type { Account, PropFirmChallenge, SopSet, Trade } from "@/types";
 
 const CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "JPY", "MYR"];
 
@@ -33,6 +33,8 @@ export default function Accounts() {
   const deleteAccount = useTradeStore((s) => s.deleteAccount);
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
+  const sopSets = useSettings((s) => s.sopSets);
+  const language = useSettings((s) => s.language);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
@@ -184,12 +186,13 @@ export default function Accounts() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {accountEquities.map(({ account, equity }) => (
           <AccountCard key={account.id} account={account} equity={equity} isActive={account.id === activeAccountId}
+            sopSets={sopSets} language={language}
             onSelect={() => setActiveAccount(account.id)} onEdit={() => openEdit(account)} onDelete={() => handleDelete(account)} />
         ))}
       </div>
 
       {dialogOpen && (
-        <AccountDialog account={editingAccount} onClose={() => { setDialogOpen(false); setEditingAccount(null); }} onSave={handleSave} />
+        <AccountDialog account={editingAccount} sopSets={sopSets} language={language} onClose={() => { setDialogOpen(false); setEditingAccount(null); }} onSave={handleSave} />
       )}
     </Layout>
   );
@@ -199,12 +202,14 @@ interface AccountCardProps {
   account: Account;
   equity: number;
   isActive: boolean;
+  sopSets: SopSet[];
+  language: string;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function AccountCard({ account, equity, isActive, onSelect, onEdit, onDelete }: AccountCardProps) {
+function AccountCard({ account, equity, isActive, sopSets, language, onSelect, onEdit, onDelete }: AccountCardProps) {
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
   const trades = useTradeStore((s) => s.trades);
@@ -301,6 +306,19 @@ function AccountCard({ account, equity, isActive, onSelect, onEdit, onDelete }: 
           <div className="tj-number text-sm font-medium text-text-secondary">{account.currency}</div>
         </div>
       </div>
+
+      {/* SOP 集绑定标签 */}
+      {account.sopSetId && (() => {
+        const bound = getSopSetById({ sopSets }, account.sopSetId);
+        if (!bound) return null;
+        return (
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              SOP: {bound.name}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Prop Firm 考试信息 */}
       {propFirm && account.propFirm && (
@@ -460,8 +478,10 @@ function PersonalGoalsCard({
   );
 }
 
-function AccountDialog({ account, onClose, onSave }: {
+function AccountDialog({ account, sopSets, language, onClose, onSave }: {
   account: Account | null;
+  sopSets: SopSet[];
+  language: string;
   onClose: () => void;
   onSave: (data: Omit<Account, "id">) => void;
 }) {
@@ -477,6 +497,7 @@ function AccountDialog({ account, onClose, onSave }: {
   const [accountType, setAccountType] = useState<"real" | "prop" | "demo" | "other">(
     account?.accountType ?? (account?.propFirm?.enabled ? "prop" : "real")
   );
+  const [sopSetId, setSopSetId] = useState(account?.sopSetId ?? "");
   // 个人账户可选:目标资金 + 日内回撤上限
   const [targetBalance, setTargetBalance] = useState(
     account?.targetBalance?.toString() ?? ""
@@ -509,6 +530,7 @@ function AccountDialog({ account, onClose, onSave }: {
       dailyDrawdownLimit: accountType !== "prop" && dailyDrawdownLimit.trim()
         ? Number(dailyDrawdownLimit) || undefined
         : undefined,
+      sopSetId: sopSetId || undefined,
     });
   };
 
@@ -699,6 +721,22 @@ function AccountDialog({ account, onClose, onSave }: {
               </div>
             </div>
           )}
+
+          {/* SOP 集绑定 */}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-text-secondary">{t.accountsPage.bindSopSet}</span>
+            <select
+              value={sopSetId}
+              onChange={(e) => setSopSetId(e.target.value)}
+              className={cls}
+            >
+              <option value="">{t.accountsPage.noBind}</option>
+              {sopSets.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.rules.length})</option>
+              ))}
+            </select>
+            <span className="text-xs text-text-muted">{t.accountsPage.bindSopSetHint}</span>
+          </label>
 
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover">

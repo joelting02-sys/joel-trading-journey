@@ -65,6 +65,7 @@ export interface Account {
   targetBalance?: number;
   // 个人账户可选:日内最大回撤金额(不超过多少)
   dailyDrawdownLimit?: number;
+  sopSetId?: string;
 }
 
 // 日志评级
@@ -121,6 +122,15 @@ export interface SopRule {
   category: SopCategory;
   title: string;
   description: string;
+}
+
+// SOP 规则集（一个组合）
+export interface SopSet {
+  id: string;
+  name: string;
+  rules: SopRule[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 // AI API 配置

@@ -1,8 +1,8 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain, GripVertical } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain, GripVertical, ChevronDown, FolderOpen } from "lucide-react";
 import Layout from "@/components/Layout";
-import { useSettings } from "@/store/useSettings";
-import type { SopRule, SopCategory } from "@/types";
+import { useSettings, getActiveSopRules } from "@/store/useSettings";
+import type { SopRule, SopCategory, SopSet } from "@/types";
 
 interface CategoryMeta {
   key: SopCategory;
@@ -15,11 +15,23 @@ interface CategoryMeta {
 
 export default function Sop() {
   const t = useSettings((s) => s.t());
-  const sopRules = useSettings((s) => s.sopRules);
+  const sopSets = useSettings((s) => s.sopSets);
+  const activeSopSetId = useSettings((s) => s.activeSopSetId);
+  const sopRules = getActiveSopRules({ sopSets, activeSopSetId });
   const setSopRules = useSettings((s) => s.setSopRules);
   const addSopRule = useSettings((s) => s.addSopRule);
   const updateSopRule = useSettings((s) => s.updateSopRule);
   const deleteSopRule = useSettings((s) => s.deleteSopRule);
+
+  const setActiveSopSetId = useSettings((s) => s.setActiveSopSetId);
+  const addSopSet = useSettings((s) => s.addSopSet);
+  const renameSopSet = useSettings((s) => s.renameSopSet);
+  const deleteSopSet = useSettings((s) => s.deleteSopSet);
+  const language = useSettings((s) => s.language);
+  const [setDropdownOpen, setSetDropdownOpen] = useState(false);
+  const [setNameDialogOpen, setSetNameDialogOpen] = useState(false);
+  const [renamingSetId, setRenamingSetId] = useState<string | null>(null);
+  const [newSetName, setNewSetName] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<SopRule | null>(null);
@@ -36,6 +48,54 @@ export default function Sop() {
     for (const r of sopRules) map[r.category].push(r);
     return map;
   }, [sopRules]);
+
+  useEffect(() => {
+    if (!setDropdownOpen) return;
+    const close = () => setSetDropdownOpen(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [setDropdownOpen]);
+
+  const activeSet = useMemo(() => sopSets.find((s) => s.id === activeSopSetId) ?? sopSets[0], [sopSets, activeSopSetId]);
+
+  function handleCreateSet() {
+    setRenamingSetId(null);
+    setNewSetName("");
+    setSetNameDialogOpen(true);
+  }
+
+  function handleRenameSet() {
+    if (!activeSet) return;
+    setRenamingSetId(activeSet.id);
+    setNewSetName(activeSet.name);
+    setSetNameDialogOpen(true);
+  }
+
+  function handleSaveSetName() {
+    const name = newSetName.trim();
+    if (!name) return;
+    if (renamingSetId) {
+      renameSopSet(renamingSetId, name);
+    } else {
+      const id = `sop-set-${Date.now()}`;
+      addSopSet({ id, name, rules: [], createdAt: Date.now(), updatedAt: Date.now() });
+      setActiveSopSetId(id);
+    }
+    setSetNameDialogOpen(false);
+    setRenamingSetId(null);
+    setNewSetName("");
+  }
+
+  function handleDeleteSet() {
+    if (!activeSet) return;
+    if (activeSet.id === "sop-default") {
+      alert(t.sopPage.noDeleteDefault);
+      return;
+    }
+    if (window.confirm(t.sopPage.deleteSetConfirm)) {
+      deleteSopSet(activeSet.id);
+    }
+  }
 
   const openAdd = () => { setEditingRule(null); setDialogOpen(true); };
   const openEdit = (rule: SopRule) => { setEditingRule(rule); setDialogOpen(true); };
@@ -85,6 +145,67 @@ export default function Sop() {
         </button>
       </div>
 
+      {/* SOP Set Selector */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-surface px-4 py-3">
+        <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+        <span className="text-xs font-medium text-text-secondary">{t.sopPage.sopSets}:</span>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setSetDropdownOpen(!setDropdownOpen)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+          >
+            {activeSet?.name ?? "SOP"}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${setDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+          {setDropdownOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-bg-surface py-1 shadow-lg">
+              {sopSets.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => { setActiveSopSetId(s.id); setSetDropdownOpen(false); }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${
+                    s.id === activeSopSetId ? "bg-primary/5 text-primary font-medium" : "text-text"
+                  }`}
+                >
+                  <span>{s.name}</span>
+                  <span className="text-[11px] text-text-muted">{s.rules.length} {language === "zh" ? "条" : "rules"}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            type="button"
+            onClick={handleCreateSet}
+            className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+          >
+            <Plus className="h-3 w-3" />
+            {t.sopPage.newSet}
+          </button>
+          <button
+            type="button"
+            onClick={handleRenameSet}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text"
+          >
+            <Pencil className="h-3 w-3" />
+            {t.sopPage.renameSet}
+          </button>
+          {activeSet && activeSet.id !== "sop-default" && (
+            <button
+              type="button"
+              onClick={handleDeleteSet}
+              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-loss/70 transition-colors hover:bg-loss/10 hover:text-loss"
+            >
+              <Trash2 className="h-3 w-3" />
+              {t.sopPage.deleteSet}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Category sections */}
       <div className="flex flex-col gap-6">
         {categories.map((cat) => (
@@ -105,6 +226,41 @@ export default function Sop() {
           onClose={() => { setDialogOpen(false); setEditingRule(null); }}
           onSave={handleSave}
         />
+      )}
+
+      {setNameDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSetNameDialogOpen(false)}>
+          <div className="w-full max-w-sm rounded-lg border border-border bg-bg-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 font-display text-base font-semibold text-text">
+              {renamingSetId ? t.sopPage.renameSet : t.sopPage.newSet}
+            </h3>
+            <input
+              type="text"
+              value={newSetName}
+              onChange={(e) => setNewSetName(e.target.value)}
+              placeholder={t.sopPage.newSetNamePlaceholder}
+              className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handleSaveSetName(); }}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSetNameDialogOpen(false)}
+                className="rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-bg-hover"
+              >
+                {t.sopPage.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSetName}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              >
+                {t.sopPage.save}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   );

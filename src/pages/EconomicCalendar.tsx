@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Layout from "@/components/Layout";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, getActiveSopRules } from "@/store/useSettings";
 import { sendCalendarSummary } from "@/services/aiService";
 import type { CalendarCountryCode, CalendarInstrumentCode } from "@/types";
 import {
@@ -28,7 +28,9 @@ export default function EconomicCalendar() {
   const calendarContent = useSettings((s) => s.calendarContent);
   const calendarUpdatedAt = useSettings((s) => s.calendarUpdatedAt);
   const setCalendarContent = useSettings((s) => s.setCalendarContent);
-  const sopRules = useSettings((s) => s.sopRules);
+  const sopSets = useSettings((s) => s.sopSets);
+  const activeSopSetId = useSettings((s) => s.activeSopSetId);
+  const sopRules = getActiveSopRules({ sopSets, activeSopSetId });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

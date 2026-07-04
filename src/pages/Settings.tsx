@@ -304,7 +304,10 @@ export default function Settings() {
           updatedAny = true;
         }
         if (sopRulesToSet !== null) {
-          useSettings.setState({ sopRules: sopRulesToSet });
+          useSettings.setState({
+            sopSets: [{ id: "sop-default", name: "Default SOP", rules: sopRulesToSet, createdAt: Date.now(), updatedAt: Date.now() }],
+            activeSopSetId: "sop-default",
+          });
           updatedAny = true;
         }
         if (settingsToSet !== null) {
@@ -374,7 +377,7 @@ export default function Settings() {
       await Promise.all([
         saveTradesToDisk(ts.trades),
         saveAccountsToDisk(ts.accounts),
-        saveSopToDisk(ss.sopRules),
+        saveSopToDisk(ss.sopSets),
         saveSettingsToDisk({
           language: ss.language,
           currency: ss.currency,

@@ -156,7 +156,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory
               },
-              sop_data: settingsState.sopRules,
+              sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt || Date.now()
             });
 
@@ -188,7 +188,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory
               },
-              sop_data: settingsState.sopRules,
+              sop_data: settingsState.sopSets,
               updated_at: clientUpdatedAt
             });
 
