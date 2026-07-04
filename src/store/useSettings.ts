@@ -250,7 +250,7 @@ export const useSettings = create<SettingsStore>()(
       setLastSyncedAt: (ts) => set({ lastSyncedAt: ts }),
       updateClientTimestamp: () => set({ clientUpdatedAt: Date.now() }),
 
-      setLanguage: (lang) =>
+      setLanguage: (lang) => {
         set((state) => {
           // 如果当前仍为默认规则,切换语言时同步替换为对应语言版本
           const isDefault =
@@ -260,8 +260,13 @@ export const useSettings = create<SettingsStore>()(
             language: lang,
             ...(isDefault ? { sopRules: getDefaultSopRules(lang) } : {}),
           };
-        }),
-      setCurrency: (cur) => set({ currency: cur }),
+        });
+        onDataMutation();
+      },
+      setCurrency: (cur) => {
+        set({ currency: cur });
+        onDataMutation();
+      },
       // AI 配置管理 ============================================
       addAiConfigEntry: (entry) => {
         const id = `ai_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -271,21 +276,29 @@ export const useSettings = create<SettingsStore>()(
           const activeAiConfigId = state.activeAiConfigId || id;
           return { aiConfigs: next, activeAiConfigId };
         });
+        onDataMutation();
         return id;
       },
-      updateAiConfigEntry: (id, patch) =>
+      updateAiConfigEntry: (id, patch) => {
         set((state) => ({
           aiConfigs: state.aiConfigs.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-        })),
-      removeAiConfigEntry: (id) =>
+        }));
+        onDataMutation();
+      },
+      removeAiConfigEntry: (id) => {
         set((state) => {
           const next = state.aiConfigs.filter((c) => c.id !== id);
           // 如果删的是当前激活的,自动切到第一个剩余的(若有)
           let activeAiConfigId = state.activeAiConfigId;
           if (activeAiConfigId === id) activeAiConfigId = next[0]?.id ?? "";
           return { aiConfigs: next, activeAiConfigId };
-        }),
-      setActiveAiConfigId: (id) => set({ activeAiConfigId: id }),
+        });
+        onDataMutation();
+      },
+      setActiveAiConfigId: (id) => {
+        set({ activeAiConfigId: id });
+        onDataMutation();
+      },
       // =========================================================
       setSopRules: (sopRules) => set({ sopRules }),
       setChatMessages: (chatMessages) => set({ chatMessages }),
@@ -340,16 +353,30 @@ export const useSettings = create<SettingsStore>()(
       deleteChatMessage: (id) =>
         set((state) => ({ chatMessages: state.chatMessages.filter((m) => m.id !== id) })),
       clearChatMessages: () => set({ chatMessages: [] }),
-      setCalendarPrefs: (calendarPrefs) => set({ calendarPrefs }),
-      setCalendarContent: (content) => set({ calendarContent: content, calendarUpdatedAt: new Date().toISOString() }),
-      addPreMarketCheck: (check) =>
-        set((state) => ({ preMarketChecks: [check, ...state.preMarketChecks] })),
-      deletePreMarketCheck: (id) =>
-        set((state) => ({ preMarketChecks: state.preMarketChecks.filter((c) => c.id !== id) })),
-      addPositionCalcRecord: (record) =>
-        set((state) => ({ positionCalcHistory: [record, ...state.positionCalcHistory].slice(0, 50) })),
-      deletePositionCalcRecord: (id) =>
-        set((state) => ({ positionCalcHistory: state.positionCalcHistory.filter((r) => r.id !== id) })),
+      setCalendarPrefs: (calendarPrefs) => {
+        set({ calendarPrefs });
+        onDataMutation();
+      },
+      setCalendarContent: (content) => {
+        set({ calendarContent: content, calendarUpdatedAt: new Date().toISOString() });
+        onDataMutation();
+      },
+      addPreMarketCheck: (check) => {
+        set((state) => ({ preMarketChecks: [check, ...state.preMarketChecks] }));
+        onDataMutation();
+      },
+      deletePreMarketCheck: (id) => {
+        set((state) => ({ preMarketChecks: state.preMarketChecks.filter((c) => c.id !== id) }));
+        onDataMutation();
+      },
+      addPositionCalcRecord: (record) => {
+        set((state) => ({ positionCalcHistory: [record, ...state.positionCalcHistory].slice(0, 50) }));
+        onDataMutation();
+      },
+      deletePositionCalcRecord: (id) => {
+        set((state) => ({ positionCalcHistory: state.positionCalcHistory.filter((r) => r.id !== id) }));
+        onDataMutation();
+      },
       t: () => translations[get().language] as unknown as TranslationKeys,
 
       // 从磁盘读取真实数据(覆盖 localStorage 旧值)

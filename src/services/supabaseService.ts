@@ -52,7 +52,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
         if (session && session.user) {
           useSettings.setState({
             supabaseUserEmail: session.user.email || "",
-            supabaseSessionToken: session.access_token || ""
+            supabaseSessionToken: session.access_token || "",
+            syncEnabled: true
           });
         }
       } catch {
@@ -63,12 +64,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
         if (session && session.user) {
           useSettings.setState({
             supabaseUserEmail: session.user.email || "",
-            supabaseSessionToken: session.access_token || ""
+            supabaseSessionToken: session.access_token || "",
+            syncEnabled: true
           });
         } else {
           useSettings.setState({
             supabaseUserEmail: "",
-            supabaseSessionToken: ""
+            supabaseSessionToken: "",
+            syncEnabled: false
           });
         }
       });
@@ -198,10 +201,19 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       }
     }
 
+    let syncTimeoutId: any = null;
+
     export function onDataMutation() {
       const settings = useSettings.getState();
       if (settings.syncEnabled && settings.supabaseSessionToken) {
         settings.updateClientTimestamp();
-        triggerSupabaseSync().catch(() => {});
+        
+        if (syncTimeoutId) {
+          clearTimeout(syncTimeoutId);
+        }
+        syncTimeoutId = setTimeout(() => {
+          triggerSupabaseSync().catch(() => {});
+          syncTimeoutId = null;
+        }, 1500);
       }
     }
