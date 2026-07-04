@@ -17,12 +17,19 @@ import { tryRestoreDirectory } from "@/services/dataStorage";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
 import { initializeSupabaseListener } from "@/services/supabaseService";
+import { useDialogStore } from "@/store/useDialogStore";
+import DialogHost from "@/components/DialogHost";
 
 export default function App() {
   // 捕捉全局 JS 崩溃错误并进行友好弹窗提示
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      alert(`检测到页面错误：\n${event.message}\n发生在：${event.filename}:${event.lineno}`);
+      // 用内置弹窗替换原生 alert
+      useDialogStore.getState().alert({
+        title: "检测到页面错误",
+        message: `${event.message}\n发生在：${event.filename}:${event.lineno}`,
+        variant: "warning",
+      });
     };
     window.addEventListener("error", handleError);
     return () => window.removeEventListener("error", handleError);
@@ -51,21 +58,24 @@ export default function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/trades" element={<Trades />} />
-        <Route path="/trades/:id" element={<TradeDetail />} />
-        <Route path="/new-trade" element={<NewTrade />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/accounts" element={<Accounts />} />
-        <Route path="/assistant" element={<Assistant />} />
-        <Route path="/calendar" element={<EconomicCalendar />} />
-        <Route path="/pre-market" element={<PreMarket />} />
-        <Route path="/position-calc" element={<PositionCalculator />} />
-        <Route path="/sop" element={<Sop />} />
-        <Route path="/settings" element={<Settings />} />
-      </Routes>
-    </Router>
+    <>
+      <DialogHost />
+      <Router>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/trades" element={<Trades />} />
+          <Route path="/trades/:id" element={<TradeDetail />} />
+          <Route path="/new-trade" element={<NewTrade />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/accounts" element={<Accounts />} />
+          <Route path="/assistant" element={<Assistant />} />
+          <Route path="/calendar" element={<EconomicCalendar />} />
+          <Route path="/pre-market" element={<PreMarket />} />
+          <Route path="/position-calc" element={<PositionCalculator />} />
+          <Route path="/sop" element={<Sop />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Router>
+    </>
   );
 }

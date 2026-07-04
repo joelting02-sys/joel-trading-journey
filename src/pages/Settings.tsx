@@ -22,6 +22,7 @@ import {
   exportAllToFile,
 } from "@/services/dataStorage";
 import { triggerSupabaseSync, getSupabaseClient } from "@/services/supabaseService";
+import { useDialogStore } from "@/store/useDialogStore";
 
 export default function Settings() {
   const accounts = useTradeStore((s) => s.accounts);
@@ -210,10 +211,13 @@ export default function Settings() {
   }
 
   async function handleUnbind() {
-    if (!window.confirm(language === "zh"
-      ? "确定解除绑定?解除后将只使用浏览器缓存(数据有丢失风险)。"
-      : "Unbind? Will only use browser cache after this (data loss risk)."
-    )) return;
+    const ok = await useDialogStore.getState().confirm({
+      message: language === "zh"
+        ? "确定解除绑定?解除后将只使用浏览器缓存(数据有丢失风险)。"
+        : "Unbind? Will only use browser cache after this (data loss risk).",
+      variant: "warning",
+    });
+    if (!ok) return;
     await unbindDirectory();
     setDataLocation("none");
   }
@@ -1122,7 +1126,12 @@ function AiConfigCard({
         <button
           type="button"
           onClick={() => {
-            if (window.confirm(labels.deleteConfirm)) onRemove();
+            useDialogStore.getState().confirm({
+              message: labels.deleteConfirm,
+              variant: "danger",
+            }).then((ok) => {
+              if (ok) onRemove();
+            });
           }}
           title={labels.delete}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"

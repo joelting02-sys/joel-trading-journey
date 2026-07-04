@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef, type FormEvent } from "react";
 import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain, GripVertical, ChevronDown, FolderOpen } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings, getActiveSopRules } from "@/store/useSettings";
+import { useDialogStore } from "@/store/useDialogStore";
 import type { SopRule, SopCategory, SopSet } from "@/types";
 
 interface CategoryMeta {
@@ -95,18 +96,29 @@ export default function Sop() {
   function handleDeleteSet() {
     if (!activeSet) return;
     if (activeSet.id === "sop-default") {
-      alert(t.sopPage.noDeleteDefault);
+      useDialogStore.getState().alert({
+        message: t.sopPage.noDeleteDefault,
+        variant: "warning",
+      });
       return;
     }
-    if (window.confirm(t.sopPage.deleteSetConfirm)) {
-      deleteSopSet(activeSet.id);
-    }
+    useDialogStore.getState().confirm({
+      message: t.sopPage.deleteSetConfirm,
+      variant: "danger",
+    }).then((ok) => {
+      if (ok) deleteSopSet(activeSet.id);
+    });
   }
 
   const openAdd = () => { setEditingRule(null); setDialogOpen(true); };
   const openEdit = (rule: SopRule) => { setEditingRule(rule); setDialogOpen(true); };
   const handleDelete = (rule: SopRule) => {
-    if (window.confirm(t.sopPage.deleteConfirm)) deleteSopRule(rule.id);
+    useDialogStore.getState().confirm({
+      message: t.sopPage.deleteConfirm,
+      variant: "danger",
+    }).then((ok) => {
+      if (ok) deleteSopRule(rule.id);
+    });
   };
   const handleSave = (data: { category: SopCategory; title: string; description: string }) => {
     if (editingRule) updateSopRule({ ...editingRule, ...data });

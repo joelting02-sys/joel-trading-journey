@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, getSopSetById } from "@/store/useSettings";
+import { useDialogStore } from "@/store/useDialogStore";
 import { formatCurrencyConverted, formatSignedCurrencyConverted } from "@/utils/currency";
 import { calcAccountEquity } from "@/utils/tradeMetrics";
 import { evaluatePropFirm } from "@/utils/propFirm";
@@ -108,7 +109,14 @@ export default function Accounts() {
 
   const openAdd = () => { setEditingAccount(null); setDialogOpen(true); };
   const openEdit = (a: Account) => { setEditingAccount(a); setDialogOpen(true); };
-  const handleDelete = (a: Account) => { if (window.confirm(t.accountsPage.deleteConfirm)) deleteAccount(a.id); };
+  const handleDelete = (a: Account) => {
+    useDialogStore.getState().confirm({
+      message: t.accountsPage.deleteConfirm,
+      variant: "danger",
+    }).then((ok) => {
+      if (ok) deleteAccount(a.id);
+    });
+  };
   const handleSave = (data: Omit<Account, "id">) => {
     if (editingAccount) updateAccount({ ...editingAccount, ...data });
     else addAccount({ id: `acc${Date.now()}`, ...data });
