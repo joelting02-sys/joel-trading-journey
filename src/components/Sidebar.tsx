@@ -5,7 +5,6 @@ import {
   PlusCircle,
   TrendingUp,
   Wallet,
-  Bot,
   CalendarDays,
   ClipboardList,
   ClipboardCheck,
@@ -14,22 +13,44 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
+
+type NavIcon = LucideIcon | { kind: "img"; src: string; size?: number };
+
+const AI_ICON: NavIcon = { kind: "img", src: "/ai-icon.svg", size: 18 };
+
+function NavIconRender({ icon, isActive }: { icon: NavIcon; isActive: boolean }) {
+  if ("kind" in icon && icon.kind === "img") {
+    const size = icon.size ?? 18;
+    return (
+      <img
+        src={icon.src}
+        alt=""
+        width={size}
+        height={size}
+        className={`shrink-0 ${isActive ? "opacity-100" : "opacity-55"}`}
+      />
+    );
+  }
+  const LucideComp = icon as LucideIcon;
+  return <LucideComp size={18} strokeWidth={1.8} />;
+}
 
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useTradeStore();
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
 
-  const navItems = [
+  const navItems: { key: string; label: string; path: string; icon: NavIcon }[] = [
     { key: "dashboard", label: t.nav.dashboard, path: "/", icon: LayoutGrid },
     { key: "trades", label: t.nav.trades, path: "/trades", icon: ListChecks },
     { key: "new-trade", label: t.nav.newTrade, path: "/new-trade", icon: PlusCircle },
     { key: "analytics", label: t.nav.analytics, path: "/analytics", icon: TrendingUp },
     { key: "accounts", label: t.nav.accounts, path: "/accounts", icon: Wallet },
-    { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: Bot },
+    { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: AI_ICON },
     { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
     { key: "chart-review", label: t.nav.chartReview, path: "/chart-review", icon: BarChart3 },
     { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
@@ -74,7 +95,6 @@ export default function Sidebar() {
         {/* Navigation */}
         <nav className="flex flex-1 flex-col gap-0.5 pb-2">
           {navItems.map((item) => {
-            const Icon = item.icon;
             return (
               <NavLink
                 key={item.key}
@@ -89,8 +109,12 @@ export default function Sidebar() {
                   }`
                 }
               >
-                <Icon size={18} strokeWidth={1.8} />
-                <span>{item.label}</span>
+                {({ isActive }) => (
+                  <>
+                    <NavIconRender icon={item.icon} isActive={isActive} />
+                    <span>{item.label}</span>
+                  </>
+                )}
               </NavLink>
             );
           })}
