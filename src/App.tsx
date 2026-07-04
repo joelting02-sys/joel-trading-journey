@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Dashboard from "@/pages/Dashboard";
+import Login from "@/pages/Login";
 import Trades from "@/pages/Trades";
 import NewTrade from "@/pages/NewTrade";
 import Analytics from "@/pages/Analytics";
@@ -42,6 +43,12 @@ export default function App() {
       }
     })();
   }, []);
+
+  const sessionToken = useSettings((s) => s.supabaseSessionToken);
+
+  if (!sessionToken) {
+    return <Login />;
+  }
 
   return (
     <Router>
