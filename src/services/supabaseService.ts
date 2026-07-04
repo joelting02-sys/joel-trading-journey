@@ -61,6 +61,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });
+          // 启动时如果已登录，立即执行一次同步拉取最新云端数据
+          triggerSupabaseSync().catch(() => {});
         }
       } catch {
         // session 恢复失败静默处理
@@ -73,6 +75,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             supabaseSessionToken: session.access_token || "",
             syncEnabled: true
           });
+          // 登录或 Auth 状态变化时触发同步
+          triggerSupabaseSync().catch(() => {});
         } else {
           useSettings.setState({
             supabaseUserEmail: "",
@@ -81,6 +85,31 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
           });
         }
       });
+
+      // 1) 标签页可见性切换时立即触发一次同步（例如唤醒电脑或切回标签页）
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            const settings = useSettings.getState();
+            if (settings.syncEnabled && settings.supabaseSessionToken) {
+              triggerSupabaseSync().catch(() => {});
+            }
+          }
+        });
+      }
+
+      // 2) 定期轮詢（每 30 秒），在網頁處於可見狀態時，自動拉取其他裝置上傳的最新數據
+      setInterval(() => {
+        const settings = useSettings.getState();
+        if (
+          settings.syncEnabled &&
+          settings.supabaseSessionToken &&
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible"
+        ) {
+          triggerSupabaseSync().catch(() => {});
+        }
+      }, 30000);
     }
 
     export async function triggerSupabaseSync(): Promise<{ success: boolean; status?: string; error?: string }> {
