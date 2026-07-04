@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from "react";
-import { Plus, Save, X, BarChart3, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Save, X, BarChart3 } from "lucide-react";
 import Layout from "@/components/Layout";
+import Select from "@/components/Select";
+import SymbolPicker from "@/components/SymbolPicker";
 import { useSettings } from "@/store/useSettings";
 import { useTradeStore } from "@/store/useTradeStore";
-import { instrumentCategories } from "@/data/instruments";
 import type { Direction, Trade } from "@/types";
 
 function toTvSymbol(symbol: string): string {
@@ -32,7 +33,7 @@ export default function ChartReview() {
 
   // 状态
   const [selectedSymbol, setSelectedSymbol] = useState("EUR/USD");
-  const [interval, setInterval] = useState("D"); // '1', '5', '15', '60', '240', 'D', 'W', 'M'
+  const interval = "D";
   const [selectedAccountId, setSelectedAccountId] = useState(activeAccountId);
 
   // 交易表单状态
@@ -141,29 +142,6 @@ export default function ChartReview() {
     setFormNotes("");
   };
 
-  // 品种选项
-  const symbolOptions = useMemo(() => {
-    return instrumentCategories.flatMap((cat) =>
-      cat.instruments.map((inst) => ({
-        value: inst.symbol,
-        label: language === "zh" ? inst.labelZh : inst.label,
-        category: language === "zh" ? cat.labelZh : cat.label,
-      }))
-    );
-  }, [language]);
-
-  // 时间周期选项（TradingView 对应值）
-  const intervalOptions = [
-    { value: "1", label: language === "zh" ? "1分钟" : "1m" },
-    { value: "5", label: language === "zh" ? "5分钟" : "5m" },
-    { value: "15", label: language === "zh" ? "15分钟" : "15m" },
-    { value: "60", label: language === "zh" ? "1小时" : "1H" },
-    { value: "240", label: language === "zh" ? "4小时" : "4H" },
-    { value: "D", label: language === "zh" ? "日线" : "Daily" },
-    { value: "W", label: language === "zh" ? "周线" : "Weekly" },
-    { value: "M", label: language === "zh" ? "月线" : "Monthly" },
-  ];
-
   // 格式化货币
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -182,35 +160,7 @@ export default function ChartReview() {
           <label className="text-xs font-medium text-text-muted">
             {language === "zh" ? "品种" : "Symbol"}
           </label>
-          <select
-            value={selectedSymbol}
-            onChange={(e) => setSelectedSymbol(e.target.value)}
-            className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
-          >
-            {symbolOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* 时间周期 */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-text-muted">
-            {language === "zh" ? "周期" : "Interval"}
-          </label>
-          <select
-            value={interval}
-            onChange={(e) => setInterval(e.target.value)}
-            className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
-          >
-            {intervalOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <SymbolPicker value={selectedSymbol} onChange={setSelectedSymbol} language={language} />
         </div>
 
         <div className="h-8 w-px bg-border" />
@@ -220,21 +170,15 @@ export default function ChartReview() {
           <label className="text-xs font-medium text-text-muted">
             {language === "zh" ? "账户" : "Account"}
           </label>
-          <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-text-secondary" />
-            <select
-              value={selectedAccountId}
-              onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
-            >
-              <option value="">{language === "zh" ? "选择账户" : "Select Account"}</option>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            value={selectedAccountId}
+            onChange={setSelectedAccountId}
+            options={[
+              { value: "", label: language === "zh" ? "选择账户" : "Select Account" },
+              ...accounts.map((acc) => ({ value: acc.id, label: acc.name })),
+            ]}
+            placeholder={language === "zh" ? "选择账户" : "Select Account"}
+          />
         </div>
 
         <div className="ml-auto flex gap-2">

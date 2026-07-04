@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight, Monitor } from "lucide-react";
 import Layout from "@/components/Layout";
+import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
 import type { AiConfigEntry, CalendarCountryCode, CalendarInstrumentCode, CalendarImportanceFilter } from "@/types";
@@ -485,9 +486,8 @@ export default function Settings() {
     });
   }
 
-  const selectClass =
+  const inputClass =
     "w-full rounded-md border border-border bg-bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary";
-  const inputClass = selectClass;
 
   return (
     <Layout title={t.title.settings}>
@@ -500,31 +500,43 @@ export default function Settings() {
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label={t.settingsPage.defaultAccount}>
-              <select value={defaultAccount} onChange={(e) => setDefaultAccount(e.target.value)} className={selectClass}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} — {a.broker}</option>
-                ))}
-              </select>
+              <Select
+                value={defaultAccount}
+                onChange={setDefaultAccount}
+                options={accounts.map((a) => ({ value: a.id, label: `${a.name} — ${a.broker}` }))}
+              />
             </Field>
             <Field label={t.settingsPage.dateFormat}>
-              <select value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} className={selectClass}>
-                <option value="MMM DD, YYYY">MMM DD, YYYY</option>
-                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-              </select>
+              <Select
+                value={dateFormat}
+                onChange={setDateFormat}
+                options={[
+                  { value: "MMM DD, YYYY", label: "MMM DD, YYYY" },
+                  { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
+                  { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
+                ]}
+              />
             </Field>
             <Field label={t.settingsPage.tradesPerPage}>
-              <select value={tradesPerPage} onChange={(e) => setTradesPerPage(e.target.value)} className={selectClass}>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
+              <Select
+                value={tradesPerPage}
+                onChange={setTradesPerPage}
+                options={[
+                  { value: "10", label: "10" },
+                  { value: "25", label: "25" },
+                  { value: "50", label: "50" },
+                ]}
+              />
             </Field>
             <Field label={t.settingsPage.language}>
-              <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className={selectClass}>
-                <option value="en">{t.settingsPage.english}</option>
-                <option value="zh">{t.settingsPage.chinese}</option>
-              </select>
+              <Select
+                value={language}
+                onChange={(v) => setLanguage(v as Language)}
+                options={[
+                  { value: "en", label: t.settingsPage.english },
+                  { value: "zh", label: t.settingsPage.chinese },
+                ]}
+              />
             </Field>
           </div>
         </SettingsSection>
@@ -612,13 +624,17 @@ export default function Settings() {
               onChange={setShowPnlInPips}
             />
             <Field label={t.settingsPage.currencyDisplay}>
-              <select value={currency} onChange={(e) => setCurrency(e.target.value as CurrencyCode)} className={selectClass}>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="JPY">JPY (¥)</option>
-                <option value="MYR">MYR (RM)</option>
-              </select>
+              <Select
+                value={currency}
+                onChange={(v) => setCurrency(v as CurrencyCode)}
+                options={[
+                  { value: "USD", label: "USD ($)" },
+                  { value: "EUR", label: "EUR (€)" },
+                  { value: "GBP", label: "GBP (£)" },
+                  { value: "JPY", label: "JPY (¥)" },
+                  { value: "MYR", label: "MYR (RM)" },
+                ]}
+              />
               <span className="text-xs text-text-muted">{t.settingsPage.currencyHint}</span>
             </Field>
           </div>

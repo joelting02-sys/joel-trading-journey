@@ -4,7 +4,8 @@ import { ArrowLeft, Save } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
-import { instrumentCategories } from "@/data/instruments";
+import Select from "@/components/Select";
+import SymbolPicker from "@/components/SymbolPicker";
 import { formatSignedCurrencyConverted } from "@/utils/currency";
 import type { Trade, Direction, TradeStatus } from "@/types";
 
@@ -160,20 +161,9 @@ export default function NewTrade() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className={labelClasses} htmlFor="symbol">{t.newTradePage.symbol}</label>
-            <select id="symbol" value={form.symbol}
-              onChange={(e) => update("symbol", e.target.value)}
-              className={`mt-1 ${inputClasses} ${border(errors.symbol)}`}>
-              <option value="">{t.newTradePage.selectSymbol}</option>
-              {instrumentCategories.map((cat) => (
-                <optgroup key={cat.key} label={language === "zh" ? cat.labelZh : cat.label}>
-                  {cat.instruments.map((inst) => (
-                    <option key={inst.symbol} value={inst.symbol}>
-                      {language === "zh" ? inst.labelZh : inst.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SymbolPicker value={form.symbol} onChange={(v) => update("symbol", v)} language={language} />
+            </div>
             {errors.symbol && <p className="mt-1 text-xs text-loss">{errors.symbol}</p>}
           </div>
 
@@ -218,12 +208,14 @@ export default function NewTrade() {
 
           <div>
             <label className={labelClasses} htmlFor="account">{t.newTradePage.account}</label>
-            <select id="account" value={form.account} onChange={(e) => update("account", e.target.value)}
-              className={`mt-1 ${inputClasses} ${border()}`}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} · {a.broker}</option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <Select
+                value={form.account}
+                onChange={(v) => update("account", v)}
+                options={accounts.map((a) => ({ value: a.id, label: `${a.name} · ${a.broker}` }))}
+                placeholder={language === "zh" ? "选择账户" : "Select account"}
+              />
+            </div>
           </div>
 
           <div>

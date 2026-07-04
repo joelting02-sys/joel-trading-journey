@@ -169,6 +169,8 @@ interface SettingsStore {
   positionCalcHistory: PositionCalcRecord[];
   // 回撤事件记录(用户手动复盘用)
   drawdownEvents: DrawdownEvent[];
+  // 自定义品种
+  customSymbols: string[];
 
   // 云端同步配置
   supabaseUrl: string;
@@ -209,6 +211,8 @@ interface SettingsStore {
   addDrawdownEvent: (event: DrawdownEvent) => void;
   updateDrawdownEvent: (event: DrawdownEvent) => void;
   deleteDrawdownEvent: (id: string) => void;
+  addCustomSymbol: (symbol: string) => void;
+  removeCustomSymbol: (symbol: string) => void;
   
   setSupabaseUrl: (url: string) => void;
   setSupabaseAnonKey: (key: string) => void;
@@ -268,6 +272,7 @@ export const useSettings = create<SettingsStore>()(
       calendarUpdatedAt: "",
       preMarketChecks: [],
       drawdownEvents: [],
+      customSymbols: [],
       positionCalcHistory: [],
       
       supabaseUrl: "https://imemwbgtxnkfodncfgal.supabase.co",
@@ -477,6 +482,19 @@ export const useSettings = create<SettingsStore>()(
         set((state) => ({ drawdownEvents: state.drawdownEvents.filter((e) => e.id !== id) }));
         onDataMutation();
       },
+      addCustomSymbol: (symbol) => {
+        const sym = symbol.trim().toUpperCase();
+        if (!sym) return;
+        set((state) => {
+          if (state.customSymbols.includes(sym)) return state;
+          return { customSymbols: [...state.customSymbols, sym] };
+        });
+        onDataMutation();
+      },
+      removeCustomSymbol: (symbol) => {
+        set((state) => ({ customSymbols: state.customSymbols.filter((s) => s !== symbol) }));
+        onDataMutation();
+      },
       t: () => translations[get().language] as unknown as TranslationKeys,
 
       // 从磁盘读取真实数据(覆盖 localStorage 旧值)
@@ -529,6 +547,7 @@ export const useSettings = create<SettingsStore>()(
         preMarketChecks: state.preMarketChecks,
         positionCalcHistory: state.positionCalcHistory,
         drawdownEvents: state.drawdownEvents,
+        customSymbols: state.customSymbols,
         supabaseUrl: state.supabaseUrl,
         supabaseAnonKey: state.supabaseAnonKey,
         supabaseUserEmail: state.supabaseUserEmail,

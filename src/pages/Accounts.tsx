@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Wallet, TrendingUp, TrendingDown, Check, Pencil, Trash2, Plus, X, ChevronDown, ChevronUp, AlertTriangle, Trophy, Target, Database } from "lucide-react";
 import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
+import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, getSopSetById } from "@/store/useSettings";
 import { useDialogStore } from "@/store/useDialogStore";
@@ -570,9 +571,11 @@ function AccountDialog({ account, sopSets, language, onClose, onSave }: {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-secondary">{t.accountsPage.currency}</span>
-              <select value={accCurrency} onChange={(e) => setAccCurrency(e.target.value)} className={cls}>
-                {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Select
+                value={accCurrency}
+                onChange={setAccCurrency}
+                options={CURRENCY_OPTIONS.map((c) => ({ value: c, label: c }))}
+              />
             </label>
           </div>
 
@@ -733,16 +736,14 @@ function AccountDialog({ account, sopSets, language, onClose, onSave }: {
           {/* SOP 集绑定 */}
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-text-secondary">{t.accountsPage.bindSopSet}</span>
-            <select
+            <Select
               value={sopSetId}
-              onChange={(e) => setSopSetId(e.target.value)}
-              className={cls}
-            >
-              <option value="">{t.accountsPage.noBind}</option>
-              {sopSets.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.rules.length})</option>
-              ))}
-            </select>
+              onChange={setSopSetId}
+              options={[
+                { value: "", label: t.accountsPage.noBind },
+                ...sopSets.map((s) => ({ value: s.id, label: `${s.name} (${s.rules.length})` })),
+              ]}
+            />
             <span className="text-xs text-text-muted">{t.accountsPage.bindSopSetHint}</span>
           </label>
 

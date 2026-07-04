@@ -14,6 +14,7 @@ import {
 import Layout from "@/components/Layout";
 import KpiCard from "@/components/KpiCard";
 import Badge from "@/components/Badge";
+import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
 import { formatPercent, formatDate } from "@/utils/format";
@@ -218,22 +219,13 @@ export default function Dashboard() {
           <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
             {t.dashboard.account || "Account"}
           </span>
-          <div className="relative flex-1 sm:max-w-xs">
-            <select
-              value={activeAccount?.id ?? ""}
-              onChange={(e) => setActiveAccount(e.target.value)}
-              className="w-full appearance-none rounded-sm border border-border bg-bg-primary px-3 py-1.5 pr-8 font-mono text-[13px] text-text outline-none transition-colors hover:border-primary focus:border-primary"
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted">
-              ▾
-            </span>
-          </div>
+          <Select
+            value={activeAccount?.id ?? ""}
+            onChange={setActiveAccount}
+            options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            placeholder={language === "zh" ? "选择账户" : "Select Account"}
+            className="sm:max-w-xs"
+          />
         </div>
       )}
 

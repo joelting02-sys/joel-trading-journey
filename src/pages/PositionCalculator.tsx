@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
 import { useTradeStore } from "@/store/useTradeStore";
-import { instrumentCategories, getInstrument } from "@/data/instruments";
+import { getInstrument } from "@/data/instruments";
+import SymbolPicker from "@/components/SymbolPicker";
 import type { Direction, PositionCalcRecord } from "@/types";
 import {
   Calculator,
@@ -143,17 +144,7 @@ export default function PositionCalculator() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>{isZh ? "品种" : "Symbol"}</label>
-                <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className={inputClass}>
-                  {instrumentCategories.map((cat) => (
-                    <optgroup key={cat.key} label={isZh ? cat.labelZh : cat.label}>
-                      {cat.instruments.map((inst) => (
-                        <option key={inst.symbol} value={inst.symbol}>
-                          {isZh ? inst.labelZh : inst.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <SymbolPicker value={symbol} onChange={setSymbol} language={language} />
               </div>
               <div>
                 <label className={labelClass}>{isZh ? "方向" : "Direction"}</label>
