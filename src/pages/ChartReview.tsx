@@ -6,11 +6,12 @@ import {
   CandlestickSeries,
   UTCTimestamp,
   createSeriesMarkers,
+  LineStyle,
 } from "lightweight-charts";
 import {
   TrendingUp, TrendingDown, Plus, Trash2, Save, X,
   BarChart3, Wallet, Calendar, Target, DollarSign,
-  MousePointer2, AlertTriangle,
+  MousePointer2, AlertTriangle, Minus,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
@@ -27,7 +28,7 @@ const GRID_COLOR = "rgba(0,0,0,0.04)";
 const TEXT_COLOR = "#868e96";
 
 // 标记类型
-type MarkerType = "entry_long" | "entry_short" | "exit" | "stoploss" | "takeprofit";
+type MarkerType = "entry_long" | "entry_short" | "exit" | "stoploss" | "takeprofit" | "horizontal_line";
 
 interface ChartMarker {
   id: string;
@@ -136,6 +137,10 @@ export default function ChartReview() {
   const [markers, setMarkers] = useState<ChartMarker[]>([]);
   const [isMockData, setIsMockData] = useState(false);
 
+  // 自定义水平支撑/阻力线
+  const [customLines, setCustomLines] = useState<Array<{ id: string; price: number; color: string; label: string }>>([]);
+  const priceLinesRef = useRef<Map<string, any>>(new Map());
+
   // 交易表单状态
   const [showForm, setShowForm] = useState(false);
   const [formDirection, setFormDirection] = useState<Direction>("long");
@@ -212,25 +217,39 @@ export default function ChartReview() {
         const price = candleSeries.coordinateToPrice(param.point.y);
         const time = param.time as UTCTimestamp;
 
-        if (price !== undefined && time !== undefined) {
-          const newMarker: ChartMarker = {
-            id: `marker_${Date.now()}`,
-            type: currentMode,
-            time: time as number,
-            price,
-          };
-          setMarkers((prev) => [...prev, newMarker]);
-
-          // 自动填充价格到表单
-          if (currentMode === "entry_long" || currentMode === "entry_short") {
-            setFormEntryPrice(price.toFixed(4));
-            setFormDirection(currentMode === "entry_long" ? "long" : "short");
-          } else if (currentMode === "exit") {
-            setFormExitPrice(price.toFixed(4));
+        if (price !== undefined) {
+          if (currentMode === "horizontal_line") {
+            const newLine = {
+              id: `line_${Date.now()}`,
+              price,
+              color: "#228be6", // 蓝色支撑阻力线
+              label: `L: ${price.toFixed(4)}`,
+            };
+            setCustomLines((prev) => [...prev, newLine]);
+            setMarkerMode(null);
+            return;
           }
 
-          // 退出标记模式
-          setMarkerMode(null);
+          if (time !== undefined) {
+            const newMarker: ChartMarker = {
+              id: `marker_${Date.now()}`,
+              type: currentMode as MarkerType,
+              time: time as number,
+              price,
+            };
+            setMarkers((prev) => [...prev, newMarker]);
+
+            // 自动填充价格到表单
+            if (currentMode === "entry_long" || currentMode === "entry_short") {
+              setFormEntryPrice(price.toFixed(4));
+              setFormDirection(currentMode === "entry_long" ? "long" : "short");
+            } else if (currentMode === "exit") {
+              setFormExitPrice(price.toFixed(4));
+            }
+
+            // 退出标记模式
+            setMarkerMode(null);
+          }
         }
     });
 
@@ -249,6 +268,7 @@ export default function ChartReview() {
       window.removeEventListener("resize", handleResize);
       chart.remove();
       markersApiRef.current = null;
+      priceLinesRef.current.clear();
     };
   }, []);
 
@@ -307,6 +327,33 @@ export default function ChartReview() {
 
     markersApiRef.current.setMarkers(tvMarkers);
   }, [markers]);
+
+  // ========== 同步自定义水平线 ==========
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+    const series = candleSeriesRef.current;
+
+    // 先清空所有旧的线（重新加载数据或切换品种时）
+    for (const lineObj of priceLinesRef.current.values()) {
+      try {
+        series.removePriceLine(lineObj);
+      } catch {}
+    }
+    priceLinesRef.current.clear();
+
+    // 重新创建所有水平线
+    customLines.forEach((l) => {
+      const lineObj = series.createPriceLine({
+        price: l.price,
+        color: l.color,
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: l.label,
+      });
+      priceLinesRef.current.set(l.id, lineObj);
+    });
+  }, [customLines, candles]);
 
   // ========== 获取K线数据 ==========
   const fetchData = async () => {
@@ -521,6 +568,33 @@ export default function ChartReview() {
 
         <div className="h-8 w-px bg-border" />
 
+        {/* 跳转到日期 */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-text-muted">
+            {language === "zh" ? "跳转到日期" : "Go to Date"}
+          </label>
+          <input
+            type="date"
+            onChange={(e) => {
+              const dateVal = e.target.value;
+              if (!dateVal) return;
+              const dateObj = new Date(dateVal);
+              const unixTime = Math.floor(dateObj.getTime() / 1000);
+              
+              if (chartRef.current) {
+                const thirtyDays = 30 * 24 * 60 * 60;
+                chartRef.current.timeScale().setVisibleRange({
+                  from: (unixTime - thirtyDays) as UTCTimestamp,
+                  to: (unixTime + thirtyDays) as UTCTimestamp,
+                });
+              }
+            }}
+            className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm text-text focus:border-primary focus:outline-none"
+          />
+        </div>
+
+        <div className="h-8 w-px bg-border" />
+
         {/* 账户选择 */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-text-muted">
@@ -544,6 +618,13 @@ export default function ChartReview() {
         </div>
 
         <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => setCustomLines([])}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover"
+          >
+            <Minus size={16} />
+            {language === "zh" ? "清空水平线" : "Clear Lines"}
+          </button>
           <button
             onClick={clearMarkers}
             className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover"
@@ -599,10 +680,23 @@ export default function ChartReview() {
           <Target size={14} />
           {language === "zh" ? "出场" : "Exit"}
         </button>
+        <button
+          onClick={() => setMarkerMode(markerMode === "horizontal_line" ? null : "horizontal_line")}
+          className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+            markerMode === "horizontal_line"
+              ? "bg-blue-500 text-white"
+              : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
+          }`}
+        >
+          <Minus size={14} />
+          {language === "zh" ? "水平线" : "Horizontal Line"}
+        </button>
         {markerMode && (
           <span className="ml-2 flex items-center gap-1 text-xs text-primary">
             <MousePointer2 size={12} />
-            {language === "zh" ? "点击图表添加标记" : "Click on chart to place marker"}
+            {markerMode === "horizontal_line"
+              ? language === "zh" ? "点击图表位置添加水平支撑/阻力线" : "Click on chart to place horizontal line"
+              : language === "zh" ? "点击图表添加标记" : "Click on chart to place marker"}
           </span>
         )}
       </div>
@@ -677,6 +771,35 @@ export default function ChartReview() {
                 <span className="tj-number font-mono text-text">{m.price.toFixed(4)}</span>
                 <button
                   onClick={() => removeMarker(m.id)}
+                  className="text-text-muted hover:text-loss"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 水平线列表 */}
+      {customLines.length > 0 && (
+        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Minus className="h-4 w-4 text-blue-500" />
+            <span className="font-display text-sm font-semibold text-text">
+              {language === "zh" ? "图表水平线 (支撑/阻力)" : "Chart Horizontal Lines (Support/Resistance)"}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {customLines.map((l) => (
+              <div
+                key={l.id}
+                className="flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-xs"
+              >
+                <span className="inline-block h-1 w-3 bg-blue-500 rounded-sm" />
+                <span className="tj-number font-mono text-text">{l.price.toFixed(4)}</span>
+                <button
+                  onClick={() => setCustomLines((prev) => prev.filter((item) => item.id !== l.id))}
                   className="text-text-muted hover:text-loss"
                 >
                   <X size={12} />
