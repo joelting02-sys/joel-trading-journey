@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, useEffect, useRef, type FormEvent } from "react";
 import { Plus, Pencil, Trash2, X, Target, LogOut, Shield, Brain, GripVertical, ChevronDown, FolderOpen } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings, getActiveSopRules } from "@/store/useSettings";
