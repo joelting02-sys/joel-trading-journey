@@ -10,7 +10,7 @@ import {
 import {
   TrendingUp, TrendingDown, Plus, Trash2, Save, X,
   BarChart3, Wallet, Calendar, Target, DollarSign,
-  MousePointer2,
+  MousePointer2, AlertTriangle,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
@@ -36,6 +36,81 @@ interface ChartMarker {
   price: number;
 }
 
+// 模拟 K 线数据生成器，用于网络连接失败时（例如中国大陆网络直接访问 Yahoo API 受限）的降级体验
+function generateMockCandles(symbol: string, interval: YahooInterval, range: YahooRange): YahooCandle[] {
+  const candles: YahooCandle[] = [];
+  const now = new Date();
+  
+  let daysLimit = 180;
+  if (range === "1mo") daysLimit = 30;
+  else if (range === "3mo") daysLimit = 90;
+  else if (range === "6mo") daysLimit = 180;
+  else if (range === "1y") daysLimit = 365;
+  else if (range === "2y") daysLimit = 730;
+  else if (range === "5y") daysLimit = 1825;
+  
+  let stepSeconds = 24 * 60 * 60; // 1d
+  if (interval === "1wk") stepSeconds = 7 * 24 * 60 * 60;
+  else if (interval === "1mo") stepSeconds = 30 * 24 * 60 * 60;
+  
+  const count = Math.ceil(daysLimit / (stepSeconds / (24 * 60 * 60)));
+  
+  let price = 100.0;
+  let volatility = 1.0;
+  
+  const s = symbol.toUpperCase();
+  if (s.includes("JPY")) {
+    price = 155.0;
+    volatility = 0.8;
+  } else if (s.includes("EUR") || s.includes("GBP") || s.includes("AUD") || s.includes("CAD")) {
+    price = 1.1200;
+    volatility = 0.005;
+  } else if (s.includes("XAU")) {
+    price = 2350.0;
+    volatility = 15.0;
+  } else if (s.includes("XAG")) {
+    price = 29.5;
+    volatility = 0.2;
+  } else if (s.includes("US500")) {
+    price = 5200.0;
+    volatility = 30.0;
+  } else if (s.includes("US30")) {
+    price = 39000.0;
+    volatility = 200.0;
+  }
+  
+  let startTimestamp = Math.floor(now.getTime() / 1000) - count * stepSeconds;
+  
+  for (let i = 0; i < count; i++) {
+    const t = startTimestamp + i * stepSeconds;
+    
+    if (interval === "1d") {
+      const date = new Date(t * 1000);
+      const day = date.getDay();
+      if (day === 0 || day === 6) continue;
+    }
+    
+    const change = (Math.random() - 0.5) * volatility * 1.5;
+    const open = price;
+    const close = price + change;
+    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+    
+    candles.push({
+      time: t,
+      open,
+      high,
+      low,
+      close,
+      volume: Math.floor(Math.random() * 1000000),
+    });
+    
+    price = close;
+  }
+  
+  return candles;
+}
+
 export default function ChartReview() {
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
@@ -59,6 +134,7 @@ export default function ChartReview() {
   const [candles, setCandles] = useState<YahooCandle[]>([]);
   const [loading, setLoading] = useState(false);
   const [markers, setMarkers] = useState<ChartMarker[]>([]);
+  const [isMockData, setIsMockData] = useState(false);
 
   // 交易表单状态
   const [showForm, setShowForm] = useState(false);
@@ -235,9 +311,17 @@ export default function ChartReview() {
   // ========== 获取K线数据 ==========
   const fetchData = async () => {
     setLoading(true);
+    setIsMockData(false);
     try {
       const symbol = selectedSymbol.replace("/", "");
-      const { candles: data } = await fetchYahooCandles(symbol, interval, range);
+      let { candles: data } = await fetchYahooCandles(symbol, interval, range);
+      
+      if (data.length === 0) {
+        // 如果拉取失败，则自动加载模拟数据，避免白屏
+        data = generateMockCandles(selectedSymbol, interval, range);
+        setIsMockData(true);
+      }
+      
       setCandles(data);
       setMarkers([]); // 切换品种时清空标记
 
@@ -254,6 +338,21 @@ export default function ChartReview() {
       }
     } catch (err) {
       console.error("Failed to fetch candles:", err);
+      // 发生异常时也降级到模拟数据，确保界面可用
+      const fallbackData = generateMockCandles(selectedSymbol, interval, range);
+      setCandles(fallbackData);
+      setIsMockData(true);
+      if (candleSeriesRef.current && fallbackData.length > 0) {
+        const candleData = fallbackData.map((c) => ({
+          time: c.time as UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }));
+        candleSeriesRef.current.setData(candleData);
+        chartRef.current?.timeScale().fitContent();
+      }
     } finally {
       setLoading(false);
     }
@@ -508,6 +607,17 @@ export default function ChartReview() {
         )}
       </div>
 
+      {isMockData && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-warning/20 bg-warning/10 p-3.5 text-xs text-text-secondary">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
+          <span>
+            {language === "zh"
+              ? "获取历史 K 线数据失败（通常因中国大陆网络无法直接访问 Yahoo Finance），已为您自动生成并加载本地模拟 K 线数据以供 SOP 模拟复盘。"
+              : "Failed to retrieve live market data (usually due to connection blockages). Simulated mock candles have been generated for your SOP review."}
+          </span>
+        </div>
+      )}
+
       {/* 图表区域 */}
       <div className="mb-4 overflow-hidden rounded-xl border border-border bg-bg-surface">
         <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
@@ -746,105 +856,6 @@ export default function ChartReview() {
         </div>
       )}
 
-      {/* 最近交易记录 */}
-      <div className="rounded-xl border border-border bg-bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-text-secondary" />
-            <span className="font-display text-sm font-semibold text-text">
-              {language === "zh" ? "最近交易" : "Recent Trades"}
-            </span>
-          </div>
-          {selectedAccountId && (
-            <span className="text-xs text-text-muted">
-              {accountTrades.length} {language === "zh" ? "笔" : "trades"}
-            </span>
-          )}
-        </div>
-
-        {!selectedAccountId ? (
-          <div className="py-8 text-center text-sm text-text-muted">
-            {language === "zh" ? "请先选择一个账户" : "Please select an account first"}
-          </div>
-        ) : accountTrades.length === 0 ? (
-          <div className="py-8 text-center text-sm text-text-muted">
-            {language === "zh" ? "暂无交易记录" : "No trades yet"}
-          </div>
-        ) : (
-          <div className="max-h-[300px] overflow-y-auto">
-            <table className="w-full border-collapse text-[13px]">
-              <thead className="sticky top-0 bg-bg-surface">
-                <tr className="border-b border-border">
-                  <th className="py-2 pr-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "品种" : "Symbol"}
-                  </th>
-                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "方向" : "Dir"}
-                  </th>
-                  <th className="px-2 py-2 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "入场" : "Entry"}
-                  </th>
-                  <th className="px-2 py-2 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "出场" : "Exit"}
-                  </th>
-                  <th className="px-2 py-2 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "盈亏" : "P&L"}
-                  </th>
-                  <th className="pl-2 py-2 text-right text-xs font-medium uppercase tracking-wide text-text-secondary">
-                    {language === "zh" ? "日期" : "Date"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {accountTrades.map((trade) => (
-                  <tr
-                    key={trade.id}
-                    className="border-b border-border-subtle last:border-0 transition-colors hover:bg-bg-hover/50"
-                  >
-                    <td className="tj-number py-2 pr-3 font-semibold text-text">
-                      {trade.symbol}
-                    </td>
-                    <td className="px-2 py-2">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
-                          trade.direction === "long"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-loss/10 text-loss"
-                        }`}
-                      >
-                        {trade.direction === "long"
-                          ? language === "zh"
-                            ? "多"
-                            : "L"
-                          : language === "zh"
-                          ? "空"
-                          : "S"}
-                      </span>
-                    </td>
-                    <td className="tj-number px-2 py-2 text-right text-text-secondary">
-                      {trade.entryPrice.toFixed(4)}
-                    </td>
-                    <td className="tj-number px-2 py-2 text-right text-text-secondary">
-                      {trade.exitPrice.toFixed(4)}
-                    </td>
-                    <td
-                      className={`tj-number px-2 py-2 text-right font-bold ${
-                        trade.pnl >= 0 ? "text-primary" : "text-loss"
-                      }`}
-                    >
-                      {trade.pnl >= 0 ? "+" : ""}
-                      {formatCurrency(trade.pnl)}
-                    </td>
-                    <td className="tj-number pl-2 py-2 text-right text-xs text-text-muted">
-                      {trade.closeDate}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </Layout>
   );
 }
