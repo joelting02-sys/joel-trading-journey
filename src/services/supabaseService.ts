@@ -56,6 +56,9 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
       try {
         const { data: { session } } = await client.auth.getSession();
         if (session && session.user) {
+          // 启动时恢复 session:以"刚刚登录了一个账号"的语义处理,先清空再同步
+          // 避免 localStorage 中上一次别的账号的缓存直接污染
+          clearLocalDataForNewAccount();
           useSettings.setState({
             supabaseUserEmail: session.user.email || "",
             supabaseSessionToken: session.access_token || "",
@@ -70,6 +73,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
       client.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
+          // 如果是"换账号登录"(不是初次恢复),先清空本地缓存
+          const prevEmail = useSettings.getState().supabaseUserEmail;
+          if (prevEmail && prevEmail !== session.user.email) {
+            clearLocalDataForNewAccount();
+          } else if (!prevEmail) {
+            // 之前没登录过,直接清空以防 localStorage 有残留
+            clearLocalDataForNewAccount();
+          }
           useSettings.setState({
             supabaseUserEmail: session.user.email || "",
             supabaseSessionToken: session.access_token || "",
@@ -145,18 +156,24 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             .upsert({
               id: user.id,
               trades_data: tradeStoreState.trades,
+              journal_data: tradeStoreState.journalEntries,
               accounts_data: tradeStoreState.accounts,
               settings_data: {
                 language: settingsState.language,
                 currency: settingsState.currency,
                 aiConfigs: settingsState.aiConfigs,
                 activeAiConfigId: settingsState.activeAiConfigId,
+                sopSets: settingsState.sopSets,
+                activeSopSetId: settingsState.activeSopSetId,
+                chatMessages: settingsState.chatMessages,
                 calendarPrefs: settingsState.calendarPrefs,
                 calendarContent: settingsState.calendarContent,
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory,
                 drawdownEvents: settingsState.drawdownEvents,
+                customSymbols: settingsState.customSymbols,
+                avatarUrl: settingsState.avatarUrl,
                 activeAccountId: tradeStoreState.activeAccountId
               },
               sop_data: settingsState.sopSets,
@@ -179,18 +196,24 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
             .upsert({
               id: user.id,
               trades_data: tradeStoreState.trades,
+              journal_data: tradeStoreState.journalEntries,
               accounts_data: tradeStoreState.accounts,
               settings_data: {
                 language: settingsState.language,
                 currency: settingsState.currency,
                 aiConfigs: settingsState.aiConfigs,
                 activeAiConfigId: settingsState.activeAiConfigId,
+                sopSets: settingsState.sopSets,
+                activeSopSetId: settingsState.activeSopSetId,
+                chatMessages: settingsState.chatMessages,
                 calendarPrefs: settingsState.calendarPrefs,
                 calendarContent: settingsState.calendarContent,
                 calendarUpdatedAt: settingsState.calendarUpdatedAt,
                 preMarketChecks: settingsState.preMarketChecks,
                 positionCalcHistory: settingsState.positionCalcHistory,
                 drawdownEvents: settingsState.drawdownEvents,
+                customSymbols: settingsState.customSymbols,
+                avatarUrl: settingsState.avatarUrl,
                 activeAccountId: tradeStoreState.activeAccountId
               },
               sop_data: settingsState.sopSets,
@@ -212,6 +235,10 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
           tradeStoreState.setTrades(trades);
           tradeStoreState.setAccounts(accounts);
+          const journal = record.journal_data;
+          if (Array.isArray(journal)) {
+            useTradeStore.setState({ journalEntries: journal });
+          }
           if (s.activeAccountId) tradeStoreState.setActiveAccountId(s.activeAccountId);
           if (Array.isArray(sop) && sop.length > 0) {
             const first = sop[0];
@@ -227,12 +254,17 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
           if (s.currency) settingsUpdate.currency = s.currency;
           if (s.aiConfigs) settingsUpdate.aiConfigs = s.aiConfigs;
           if (s.activeAiConfigId !== undefined) settingsUpdate.activeAiConfigId = s.activeAiConfigId;
+          if (Array.isArray(s.sopSets) && s.sopSets.length > 0) settingsUpdate.sopSets = s.sopSets;
+          if (typeof s.activeSopSetId === "string") settingsUpdate.activeSopSetId = s.activeSopSetId;
+          if (Array.isArray(s.chatMessages)) settingsUpdate.chatMessages = s.chatMessages;
           if (s.calendarPrefs) settingsUpdate.calendarPrefs = s.calendarPrefs;
           if (s.calendarContent !== undefined) settingsUpdate.calendarContent = s.calendarContent;
           if (s.calendarUpdatedAt !== undefined) settingsUpdate.calendarUpdatedAt = s.calendarUpdatedAt;
           if (s.preMarketChecks) settingsUpdate.preMarketChecks = s.preMarketChecks;
           if (s.positionCalcHistory) settingsUpdate.positionCalcHistory = s.positionCalcHistory;
           if (s.drawdownEvents) settingsUpdate.drawdownEvents = s.drawdownEvents;
+          if (Array.isArray(s.customSymbols)) settingsUpdate.customSymbols = s.customSymbols;
+          if (typeof s.avatarUrl === "string") settingsUpdate.avatarUrl = s.avatarUrl;
 
           settingsUpdate.clientUpdatedAt = serverUpdatedAt;
           settingsUpdate.lastSyncedAt = serverUpdatedAt;
@@ -251,6 +283,42 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
     }
 
     let syncTimeoutId: any = null;
+
+    // 切换账号时,清空所有"跟着账号走"的数据,只保留用户偏好(language/currency/calendarPrefs)。
+    // 这样新账号登录后不会看到上一个账号的本地缓存污染云端。
+    export function clearLocalDataForNewAccount() {
+      // 交易库:清空
+      useTradeStore.setState({
+        trades: [],
+        accounts: [],
+        journalEntries: [],
+        activeAccountId: "",
+      });
+      // 配置库:只清"账号数据",语言/货币/日历偏好保留
+      useSettings.setState({
+        sopSets: [{
+          id: "sop-default",
+          name: useSettings.getState().language === "zh" ? "默认 SOP" : "Default SOP",
+          rules: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }],
+        activeSopSetId: "sop-default",
+        chatMessages: [],
+        aiConfigs: [],
+        activeAiConfigId: "",
+        calendarContent: "",
+        calendarUpdatedAt: "",
+        preMarketChecks: [],
+        positionCalcHistory: [],
+        drawdownEvents: [],
+        customSymbols: [],
+        avatarUrl: "",
+        // 关键:把 clientUpdatedAt 归零,让下一次 sync 走"server has newer"分支(从云端拉)
+        clientUpdatedAt: 0,
+        lastSyncedAt: 0,
+      });
+    }
 
     export function onDataMutation() {
       const settings = useSettings.getState();

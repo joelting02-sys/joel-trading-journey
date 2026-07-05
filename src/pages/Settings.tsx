@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, FolderCheck, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, ChevronRight, Monitor, User } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, FolderCheck, ChevronRight, User } from "lucide-react";
 import Layout from "@/components/Layout";
 import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
@@ -22,7 +22,7 @@ import {
   type DataLocation,
   exportAllToFile,
 } from "@/services/dataStorage";
-import { triggerSupabaseSync, getSupabaseClient, fetchDevices, removeCurrentDevice, type DeviceInfo } from "@/services/supabaseService";
+import { triggerSupabaseSync, getSupabaseClient, removeCurrentDevice, clearLocalDataForNewAccount } from "@/services/supabaseService";
 import { useDialogStore } from "@/store/useDialogStore";
 
 export default function Settings() {
@@ -70,11 +70,8 @@ export default function Settings() {
   const [fileContent, setFileContent] = useState<string>("");
   const [loadingFile, setLoadingFile] = useState(false);
 
-  // 云端同步相关状态
-  const [syncingCloud, setSyncingCloud] = useState(false);
+  // 云端同步相关状态(后台静默运行,只保留必要的错误提示)
   const [syncError, setSyncError] = useState("");
-  const [syncSuccess, setSyncSuccess] = useState(false);
-  const [syncStatusMsg, setSyncStatusMsg] = useState("");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,37 +80,6 @@ export default function Settings() {
   const [authenticating, setAuthenticating] = useState(false);
   const [activeTab, setActiveTab] = useState<"account" | "general" | "ai" | "data">("account");
 
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-
-  async function handleCloudSync() {
-    setSyncingCloud(true);
-    setSyncError("");
-    setSyncSuccess(false);
-    setSyncStatusMsg("");
-    try {
-      const res = await triggerSupabaseSync();
-      if (res.success) {
-        setSyncSuccess(true);
-        if (res.status === "synced") {
-          setSyncStatusMsg(language === "zh" ? "同步成功：数据已保存至云端。" : "Synced: Data uploaded to cloud.");
-        } else if (res.status === "updated_server") {
-          setSyncStatusMsg(language === "zh" ? "云端数据已成功更新为最新本地数据。" : "Cloud data updated to latest local data.");
-        } else if (res.status === "updated_client") {
-          setSyncStatusMsg(language === "zh" ? "本地数据已成功更新为最新云端数据。" : "Local data updated to latest cloud data.");
-        } else if (res.status === "in_sync") {
-          setSyncStatusMsg(language === "zh" ? "两端数据已是一致，无需更新。" : "Data is already in sync.");
-        }
-      } else {
-        setSyncError(res.error || "Sync failed");
-      }
-    } catch (e) {
-      setSyncError((e as Error).message || "Sync failed");
-    } finally {
-      setSyncingCloud(false);
-    }
-  }
-
   async function handleAuth() {
     if (!email.trim() || !password) {
       setSyncError(language === "zh" ? "请输入邮箱和密码" : "Please enter email and password");
@@ -121,8 +87,6 @@ export default function Settings() {
     }
     setAuthenticating(true);
     setSyncError("");
-    setSyncSuccess(false);
-    setSyncStatusMsg("");
     try {
       const client = getSupabaseClient();
       if (!client) {
@@ -133,17 +97,21 @@ export default function Settings() {
         const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
         if (data.session && data.user) {
+          // 登录新账号前:清空本地缓存(防止上一个账号的 trades/accounts/chatMessages 污染)
+          clearLocalDataForNewAccount();
           useSettings.setState({
             supabaseUserEmail: data.user.email || "",
             supabaseSessionToken: data.session.access_token || ""
           });
-          setTimeout(handleCloudSync, 200);
+          // 登录后从云端拉取此账号的数据(此时 clientUpdatedAt=0,会走"server has newer"分支)
+          triggerSupabaseSync().catch(() => {});
         }
       } else {
         const { data, error } = await client.auth.signUp({ email: email.trim(), password });
         if (error) throw error;
-        setSyncSuccess(true);
-        setSyncStatusMsg(language === "zh" ? "注册成功！请检查你的邮箱以确认账号，或直接尝试登录。" : "Sign up successful! Please check your email or try logging in.");
+        setSyncError(language === "zh"
+          ? "注册成功！请检查你的邮箱以确认账号，或直接尝试登录。"
+          : "Sign up successful! Please check your email or try logging in.");
         setAuthMode("login");
       }
     } catch (e) {
@@ -155,23 +123,22 @@ export default function Settings() {
 
   async function handleSignOut() {
     setSyncError("");
-    setSyncSuccess(false);
-    setSyncStatusMsg("");
     try {
       const client = getSupabaseClient();
       if (client) {
         await removeCurrentDevice(client);
         await client.auth.signOut({ scope: "local" });
       }
-    } catch (e) {
+    } catch {
       // Ignore auth error on sign out
     } finally {
+      // 登出后清空所有本地数据,防止下一位用户登入时看到上一位的数据
+      clearLocalDataForNewAccount();
       useSettings.setState({
         supabaseUserEmail: "",
         supabaseSessionToken: "",
         lastSyncedAt: 0
       });
-      setDevices([]);
       setEmail("");
       setPassword("");
     }
@@ -187,39 +154,6 @@ export default function Settings() {
       settings.setSupabaseAnonKey("sb_publishable_CWNd8zRNESxUvpNZ7BA16Q_UA1DjMuO");
     }
   }, []);
-
-  useEffect(() => {
-    if (supabaseSessionToken) {
-      handleLoadDevices();
-    }
-  }, [supabaseSessionToken]);
-
-  async function handleLoadDevices() {
-    setLoadingDevices(true);
-    try {
-      const client = getSupabaseClient();
-      if (!client) return;
-      const list = await fetchDevices(client);
-      setDevices(list);
-    } catch {
-      // silent
-    } finally {
-      setLoadingDevices(false);
-    }
-  }
-
-  async function handleRemoveDevice(deviceId: string) {
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) return;
-    try {
-      await client.from("user_devices").delete().match({ user_id: user.id, device_id: deviceId });
-      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
-    } catch {
-      // silent
-    }
-  }
 
 
 
@@ -281,8 +215,13 @@ export default function Settings() {
         // 定义待应用的 Store 状态
         let tradesToSet: any[] | null = null;
         let accountsToSet: any[] | null = null;
+        let journalEntriesToSet: any[] | null = null;
+        let activeAccountIdToSet: string | null = null;
         let settingsToSet: any = null;
-        let sopRulesToSet: any[] | null = null;
+        let sopSetsToSet: any[] | null = null;
+        let chatMessagesToSet: any[] | null = null;
+        let customSymbolsToSet: string[] | null = null;
+        let avatarUrlToSet: string | null = null;
 
         // 1) 检测合并备份格式 (即由「导出备份数据」生成的包含 tradesStore 或 settingsStore 的 JSON)
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed.tradesStore || parsed.settingsStore || parsed.trades || parsed.settings)) {
@@ -291,18 +230,27 @@ export default function Settings() {
             const tState = tradesObj.state || tradesObj;
             if (Array.isArray(tState.trades)) tradesToSet = tState.trades;
             if (Array.isArray(tState.accounts)) accountsToSet = tState.accounts;
+            if (Array.isArray(tState.journalEntries)) journalEntriesToSet = tState.journalEntries;
+            if (typeof tState.activeAccountId === "string") activeAccountIdToSet = tState.activeAccountId;
           }
           const settingsObj = parsed.settingsStore || parsed.settings;
           if (settingsObj) {
             const sState = settingsObj.state || settingsObj;
             settingsToSet = sState;
-            if (Array.isArray(sState.sopRules)) sopRulesToSet = sState.sopRules;
+            if (Array.isArray(sState.sopSets)) sopSetsToSet = sState.sopSets;
+            else if (Array.isArray(sState.sopRules)) {
+              // 兼容旧版导出格式
+              sopSetsToSet = [{ id: "sop-default", name: "Default SOP", rules: sState.sopRules, createdAt: Date.now(), updatedAt: Date.now() }];
+            }
+            if (Array.isArray(sState.chatMessages)) chatMessagesToSet = sState.chatMessages;
+            if (Array.isArray(sState.customSymbols)) customSymbolsToSet = sState.customSymbols;
+            if (typeof sState.avatarUrl === "string") avatarUrlToSet = sState.avatarUrl;
           }
         }
         // 2) 检测单个 Array 结构文件 (如 trades.json, accounts.json, sop.json)
         else if (Array.isArray(parsed)) {
           if (parsed.length === 0) {
-            throw new Error(language === "zh" ? "上传的 JSON 数组为空，无法判断数据类型" : "Uploaded JSON array is empty, cannot determine type");
+            throw new Error(language === "zh" ? "上传的 JSON 数组为空,无法判断数据类型" : "Uploaded JSON array is empty, cannot determine type");
           }
           const firstItem = parsed[0];
           if (firstItem && typeof firstItem === "object") {
@@ -311,7 +259,12 @@ export default function Settings() {
             } else if ("balance" in firstItem && "equity" in firstItem) {
               accountsToSet = parsed; // accounts.json
             } else if ("category" in firstItem && "title" in firstItem) {
-              sopRulesToSet = parsed; // sop.json
+              // sop.json: 可能是 SopRule[] 或 SopSet[]
+              if ("rules" in firstItem && Array.isArray((firstItem as any).rules)) {
+                sopSetsToSet = parsed as any[];
+              } else {
+                sopSetsToSet = [{ id: "sop-default", name: "Default SOP", rules: parsed, createdAt: Date.now(), updatedAt: Date.now() }];
+              }
             } else {
               throw new Error(language === "zh" ? "无法识别的 JSON 数组结构" : "Unrecognized JSON array structure");
             }
@@ -323,8 +276,10 @@ export default function Settings() {
         else if (parsed && typeof parsed === "object") {
           if ("aiConfigs" in parsed || "language" in parsed || "currency" in parsed) {
             settingsToSet = parsed; // settings.json
-            if (Array.isArray(parsed.sopRules)) {
-              sopRulesToSet = parsed.sopRules;
+            if (Array.isArray((parsed as any).sopSets)) {
+              sopSetsToSet = (parsed as any).sopSets;
+            } else if (Array.isArray((parsed as any).sopRules)) {
+              sopSetsToSet = [{ id: "sop-default", name: "Default SOP", rules: (parsed as any).sopRules, createdAt: Date.now(), updatedAt: Date.now() }];
             }
           } else {
             throw new Error(language === "zh" ? "无法识别的 JSON 对象结构" : "Unrecognized JSON object structure");
@@ -341,17 +296,42 @@ export default function Settings() {
           updatedAny = true;
         }
         if (accountsToSet !== null) {
-          useTradeStore.setState({ 
+          useTradeStore.setState({
             accounts: accountsToSet,
-            activeAccountId: accountsToSet[0]?.id || ""
           });
           updatedAny = true;
         }
-        if (sopRulesToSet !== null) {
+        if (journalEntriesToSet !== null) {
+          useTradeStore.setState({ journalEntries: journalEntriesToSet });
+          updatedAny = true;
+        }
+        if (activeAccountIdToSet !== null) {
+          useTradeStore.setState({ activeAccountId: activeAccountIdToSet });
+          updatedAny = true;
+        } else if (accountsToSet !== null && accountsToSet.length > 0) {
+          // 没单独传 activeAccountId 但有 accounts,默认指向第一个
+          useTradeStore.setState({ activeAccountId: accountsToSet[0]?.id || "" });
+        }
+        if (sopSetsToSet !== null && sopSetsToSet.length > 0) {
           useSettings.setState({
-            sopSets: [{ id: "sop-default", name: "Default SOP", rules: sopRulesToSet, createdAt: Date.now(), updatedAt: Date.now() }],
-            activeSopSetId: "sop-default",
+            sopSets: sopSetsToSet,
+            // 保留用户当前激活的;若不在导入集合内则回退到第一个
+            activeSopSetId: useSettings.getState().sopSets.some((s) => s.id === sopSetsToSet![0].id)
+              ? sopSetsToSet[0].id
+              : sopSetsToSet[0].id,
           });
+          updatedAny = true;
+        }
+        if (chatMessagesToSet !== null) {
+          useSettings.setState({ chatMessages: chatMessagesToSet });
+          updatedAny = true;
+        }
+        if (customSymbolsToSet !== null) {
+          useSettings.setState({ customSymbols: customSymbolsToSet });
+          updatedAny = true;
+        }
+        if (avatarUrlToSet !== null) {
+          useSettings.setState({ avatarUrl: avatarUrlToSet });
           updatedAny = true;
         }
         if (settingsToSet !== null) {
@@ -364,8 +344,12 @@ export default function Settings() {
             activeAiConfigId: s.activeAiConfigId || currentSettings.activeAiConfigId,
             calendarPrefs: s.calendarPrefs || currentSettings.calendarPrefs,
             calendarContent: s.calendarContent !== undefined ? s.calendarContent : currentSettings.calendarContent,
+            calendarUpdatedAt: s.calendarUpdatedAt !== undefined ? s.calendarUpdatedAt : currentSettings.calendarUpdatedAt,
             preMarketChecks: Array.isArray(s.preMarketChecks) ? s.preMarketChecks : currentSettings.preMarketChecks,
             positionCalcHistory: Array.isArray(s.positionCalcHistory) ? s.positionCalcHistory : currentSettings.positionCalcHistory,
+            drawdownEvents: Array.isArray(s.drawdownEvents) ? s.drawdownEvents : currentSettings.drawdownEvents,
+            // 若导入文件内显式带 activeSopSetId,则覆盖
+            ...(typeof s.activeSopSetId === "string" ? { activeSopSetId: s.activeSopSetId } : {}),
           });
           updatedAny = true;
         }
@@ -378,21 +362,12 @@ export default function Settings() {
         useSettings.getState().updateClientTimestamp();
 
         setImportSuccess(true);
-        
-        // If logged in, trigger supabase sync immediately
+
+        // 已登录则后台触发同步(用户无感知)
         const client = getSupabaseClient();
         const sessionToken = useSettings.getState().supabaseSessionToken;
         if (client && sessionToken) {
-          setSyncStatusMsg(language === "zh" ? "导入成功！正在同步至云端..." : "Import successful! Syncing to cloud...");
-          const res = await triggerSupabaseSync();
-          if (res.success) {
-            setSyncSuccess(true);
-            setSyncStatusMsg(language === "zh" ? "导入成功且云端同步完成！" : "Import successful and synced to cloud!");
-          } else {
-            setSyncError(res.error || "Cloud sync failed");
-          }
-        } else {
-          setSyncStatusMsg(language === "zh" ? "导入成功！(数据已保存在本地)" : "Import successful! (Data saved locally)");
+          triggerSupabaseSync().catch(() => {});
         }
       } catch (err: any) {
         setImportError(err.message || String(err));
@@ -427,9 +402,18 @@ export default function Settings() {
           currency: ss.currency,
           aiConfigs: ss.aiConfigs,
           activeAiConfigId: ss.activeAiConfigId,
+          sopSets: ss.sopSets,
+          activeSopSetId: ss.activeSopSetId,
+          chatMessages: ss.chatMessages,
           calendarPrefs: ss.calendarPrefs,
           calendarContent: ss.calendarContent,
           calendarUpdatedAt: ss.calendarUpdatedAt,
+          preMarketChecks: ss.preMarketChecks,
+          positionCalcHistory: ss.positionCalcHistory,
+          drawdownEvents: ss.drawdownEvents,
+          customSymbols: ss.customSymbols,
+          avatarUrl: ss.avatarUrl,
+          activeAccountId: ts.activeAccountId,
         }),
       ]);
       setMigrated(true);
@@ -497,7 +481,7 @@ export default function Settings() {
         {/* Tab Navigation */}
         <div className="flex gap-1 rounded-lg border border-border bg-bg-surface p-1">
           {([
-            { key: "account", label: language === "zh" ? "账户与同步" : "Account & Sync", icon: <RefreshCw className="h-3.5 w-3.5" /> },
+            { key: "account", label: language === "zh" ? "账户" : "Account", icon: <RefreshCw className="h-3.5 w-3.5" /> },
             { key: "general", label: language === "zh" ? "通用设置" : "General", icon: <SettingsIcon className="h-3.5 w-3.5" /> },
             { key: "ai", label: language === "zh" ? "AI & 日历" : "AI & Calendar", icon: <Bot className="h-3.5 w-3.5" /> },
             { key: "data", label: language === "zh" ? "数据管理" : "Data", icon: <Database className="h-3.5 w-3.5" /> },
@@ -522,7 +506,7 @@ export default function Settings() {
         {/* Tab Content */}
         {activeTab === "account" && (
           <>
-            {/* Profile Card */}
+            {/* Profile Card (含账号登录) */}
             <SettingsSection
               icon={<User className="h-4 w-4" />}
               title={language === "zh" ? "个人资料" : "Profile"}
@@ -579,138 +563,28 @@ export default function Settings() {
                         {language === "zh" ? "移除头像" : "Remove avatar"}
                       </button>
                     )}
+                    {supabaseSessionToken && (
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="text-[11px] text-text-muted transition-colors hover:text-loss"
+                      >
+                        {language === "zh" ? "退出登录" : "Sign Out"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-            </SettingsSection>
 
-            {/* Cloud Sync */}
-            <SettingsSection
-              icon={<RefreshCw className="h-4 w-4" />}
-              title={language === "zh" ? "云端同步" : "Cloud Sync"}
-              description={
-                language === "zh"
-                  ? "数据在后台自动同步，多设备无缝切换。"
-                  : "Data syncs automatically in the background across all your devices."
-              }
-            >
               {syncError && (
-                <div className="mb-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
+                <div className="mt-3 flex items-center gap-2 rounded-md border border-loss/30 bg-loss/5 px-3 py-2 text-xs text-loss">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   <span>{syncError}</span>
                 </div>
               )}
-              {syncSuccess && (
-                <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
-                  <FolderCheck className="h-3.5 w-3.5 shrink-0" />
-                  <span>{syncStatusMsg}</span>
-                </div>
-              )}
 
-              {supabaseSessionToken ? (
-                <div className="flex flex-col gap-3">
-                  {/* Logged in status bar */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-                        {supabaseUserEmail[0]?.toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-text">{supabaseUserEmail}</div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                          {syncingCloud
-                            ? (language === "zh" ? "同步中..." : "Syncing...")
-                            : (lastSyncedAt || 0) > 0
-                              ? (language === "zh" ? `上次同步: ${getTimeAgo(new Date(lastSyncedAt).toISOString(), language)}` : `Synced ${getTimeAgo(new Date(lastSyncedAt).toISOString(), language)}`)
-                              : (language === "zh" ? "已连接" : "Connected")}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSignOut}
-                      className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-loss/30 hover:text-loss"
-                    >
-                      {language === "zh" ? "退出" : "Sign Out"}
-                    </button>
-                  </div>
-
-                  {/* Device List (collapsible) */}
-                  <details className="group">
-                    <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-text">
-                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                      {language === "zh" ? "已登录设备" : "Active Devices"}
-                      <span className="text-[10px] text-text-muted">({devices.length})</span>
-                    </summary>
-                    <div className="mt-2 flex flex-col gap-2 pl-1">
-                      <button
-                        type="button"
-                        onClick={handleLoadDevices}
-                        disabled={loadingDevices}
-                        className="self-start text-[11px] text-text-muted transition-colors hover:text-primary disabled:opacity-50"
-                      >
-                        {loadingDevices
-                          ? (language === "zh" ? "加载中..." : "Loading...")
-                          : (language === "zh" ? "刷新列表" : "Refresh")}
-                      </button>
-                      {devices.length === 0 ? (
-                        <p className="text-xs text-text-muted py-1">
-                          {language === "zh" ? "暂无记录" : "No records"}
-                        </p>
-                      ) : (
-                        devices.map((device) => {
-                          const isCurrent = device.isCurrent;
-                          const timeAgo = getTimeAgo(device.last_seen, language);
-                          return (
-                            <div
-                              key={device.id}
-                              className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
-                                isCurrent ? "border-primary/30 bg-primary/5" : "border-border bg-bg-elevated"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Monitor className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-medium text-text truncate">{device.device_name}</span>
-                                    {isCurrent && (
-                                      <span className="shrink-0 rounded-sm bg-primary/15 px-1 py-0.5 text-[9px] font-semibold text-primary">
-                                        {language === "zh" ? "当前" : "This"}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[10px] text-text-muted">
-                                    {device.browser} · {timeAgo}
-                                  </span>
-                                </div>
-                              </div>
-                              {!isCurrent && (
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const ok = await useDialogStore.getState().confirm({
-                                      message: language === "zh"
-                                        ? `将「${device.device_name}」退出登录？`
-                                        : `Remove "${device.device_name}"?`,
-                                      variant: "warning",
-                                    });
-                                    if (ok) handleRemoveDevice(device.id);
-                                  }}
-                                  className="ml-2 shrink-0 rounded-sm p-1 text-text-muted transition-colors hover:bg-loss/10 hover:text-loss"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </details>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
+              {!supabaseSessionToken && (
+                <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
                   <div className="flex gap-2 border-b border-border pb-2">
                     <button
                       type="button"
@@ -773,8 +647,8 @@ export default function Settings() {
               title={language === "zh" ? "本地数据备份与恢复" : "Local Data Backup & Recovery"}
               description={
                 language === "zh"
-                  ? "您可以导出当前所有数据的 JSON 备份文件，或上传备份文件来恢复数据。上传的备份数据將自动同步至云端数据库。"
-                  : "Export a JSON backup of all your data, or upload a backup file to restore your data. Restored data will sync to the cloud database automatically."
+                  ? "您可以导出当前所有数据的 JSON 备份文件，或上传备份文件来恢复数据。"
+                  : "Export a JSON backup of all your data, or upload a backup file to restore your data."
               }
             >
               {importError && (

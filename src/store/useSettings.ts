@@ -240,18 +240,23 @@ const settingsDualStorage: PersistStorage<SettingsStore> = {
     if (getLocation() === "filesystem" && value.state) {
       const s = value.state;
       if (s.sopSets !== undefined) saveSopToDisk(s.sopSets).catch(() => {});
-      // settings 包含 language/currency/aiConfigs/calendarPrefs,统一存一份
+      // settings 包含 language/currency/aiConfigs/calendarPrefs 等,统一存一份
       const settings = {
         language: s.language,
         currency: s.currency,
         aiConfigs: s.aiConfigs,
         activeAiConfigId: s.activeAiConfigId,
+        sopSets: s.sopSets,
+        activeSopSetId: s.activeSopSetId,
+        chatMessages: s.chatMessages,
         calendarPrefs: s.calendarPrefs,
         calendarContent: s.calendarContent,
         calendarUpdatedAt: s.calendarUpdatedAt,
         preMarketChecks: s.preMarketChecks,
         positionCalcHistory: s.positionCalcHistory,
         drawdownEvents: s.drawdownEvents,
+        customSymbols: s.customSymbols,
+        avatarUrl: s.avatarUrl,
       };
       saveSettingsToDisk(settings).catch(() => {});
     }
@@ -509,7 +514,7 @@ export const useSettings = create<SettingsStore>()(
       hydrateFromDisk: async () => {
         const [sopData, settings] = await Promise.all([
           loadSopFromDisk<SopRule[] | SopSet[] | null>(null),
-          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[]; drawdownEvents?: DrawdownEvent[]; sopSets?: SopSet[]; activeSopSetId?: string } | null>(null),
+          loadSettingsFromDisk<{ language?: Language; currency?: string; aiConfigs?: AiConfigEntry[]; activeAiConfigId?: string; calendarPrefs?: CalendarPreferences; calendarContent?: string; calendarUpdatedAt?: string; preMarketChecks?: PreMarketCheck[]; positionCalcHistory?: PositionCalcRecord[]; drawdownEvents?: DrawdownEvent[]; sopSets?: SopSet[]; activeSopSetId?: string; chatMessages?: ChatMessage[]; customSymbols?: string[]; avatarUrl?: string } | null>(null),
         ]);
         if (sopData && sopData.length > 0) {
           const first = sopData[0] as SopRule | SopSet;
@@ -533,6 +538,9 @@ export const useSettings = create<SettingsStore>()(
           if (settings.preMarketChecks) set({ preMarketChecks: settings.preMarketChecks });
           if (settings.positionCalcHistory) set({ positionCalcHistory: settings.positionCalcHistory });
           if (settings.drawdownEvents) set({ drawdownEvents: settings.drawdownEvents });
+          if (settings.chatMessages) set({ chatMessages: settings.chatMessages });
+          if (settings.customSymbols) set({ customSymbols: settings.customSymbols });
+          if (settings.avatarUrl !== undefined) set({ avatarUrl: settings.avatarUrl });
         }
       },
     }),
