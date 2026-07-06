@@ -7,44 +7,35 @@ import {
   Wallet,
   CalendarDays,
   ClipboardList,
-  ClipboardCheck,
   Calculator,
-  History,
   BarChart3,
   Settings as SettingsIcon,
   X,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings } from "@/store/useSettings";
 
-type NavIcon = LucideIcon | { kind: "img"; src: string; size?: number };
-
-const AI_ICON: NavIcon = { kind: "img", src: "/ai-icon.svg", size: 18 };
+type NavIcon = LucideIcon;
 
 function NavIconRender({ icon, isActive }: { icon: NavIcon; isActive: boolean }) {
-  if ("kind" in icon && icon.kind === "img") {
-    const size = icon.size ?? 18;
-    return (
-      <img
-        src={icon.src}
-        alt=""
-        width={size}
-        height={size}
-        className={`shrink-0 transition-all duration-150 ${
-          isActive ? "" : "opacity-65"
-        }`}
-        style={{
-          filter: isActive
-            ? "invert(0.4) sepia(1) saturate(5) hue-rotate(140deg)"
-            : "none",
-        }}
-      />
-    );
-  }
   const LucideComp = icon as LucideIcon;
   return <LucideComp size={18} strokeWidth={1.8} />;
 }
+
+type NavGroup = {
+  key: string;
+  label: string;
+  items: NavItem[];
+};
+
+type NavItem = {
+  key: string;
+  label: string;
+  path: string;
+  icon: NavIcon;
+};
 
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useTradeStore();
@@ -52,17 +43,41 @@ export default function Sidebar() {
   const language = useSettings((s) => s.language);
   const location = useLocation();
 
-  const navItems = [
-    { key: "dashboard", label: t.nav.dashboard, path: "/", icon: LayoutGrid },
-    { key: "trades", label: t.nav.trades, path: "/trades", icon: ListChecks },
-    { key: "new-trade", label: t.nav.newTrade, path: "/new-trade", icon: PlusCircle },
-    { key: "analytics", label: t.nav.analytics, path: "/analytics", icon: TrendingUp },
-    { key: "accounts", label: t.nav.accounts, path: "/accounts", icon: Wallet },
-    { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: AI_ICON },
-    { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
-    { key: "chart-review", label: t.nav.chartReview, path: "/chart-review", icon: BarChart3 },
-    { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
-    { key: "sop", label: t.nav.sop, path: "/sop", icon: ClipboardList },
+  const navGroups: NavGroup[] = [
+    {
+      key: "trading",
+      label: language === "zh" ? "交易" : "Trading",
+      items: [
+        { key: "dashboard", label: t.nav.dashboard, path: "/", icon: LayoutGrid },
+        { key: "trades", label: t.nav.trades, path: "/trades", icon: ListChecks },
+        { key: "new-trade", label: t.nav.newTrade, path: "/new-trade", icon: PlusCircle },
+        { key: "analytics", label: t.nav.analytics, path: "/analytics", icon: TrendingUp },
+        { key: "accounts", label: t.nav.accounts, path: "/accounts", icon: Wallet },
+      ],
+    },
+    {
+      key: "tools",
+      label: language === "zh" ? "工具" : "Tools",
+      items: [
+        { key: "calendar", label: t.nav.calendar, path: "/calendar", icon: CalendarDays },
+        { key: "chart-review", label: t.nav.chartReview, path: "/chart-review", icon: BarChart3 },
+        { key: "position-calc", label: t.nav.positionCalc, path: "/position-calc", icon: Calculator },
+      ],
+    },
+    {
+      key: "rules",
+      label: language === "zh" ? "规则" : "Rules",
+      items: [
+        { key: "sop", label: t.nav.sop, path: "/sop", icon: ClipboardList },
+      ],
+    },
+    {
+      key: "ai",
+      label: language === "zh" ? "AI 助手" : "AI Assistant",
+      items: [
+        { key: "assistant", label: t.nav.assistant, path: "/assistant", icon: Bot },
+      ],
+    },
   ];
 
   return (
@@ -101,27 +116,34 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-1 flex-col gap-0.5 pb-2">
-          {navItems.map((item) => {
-            return (
-              <NavLink
-                key={item.key}
-                to={item.path}
-                end={item.path === "/"}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `nav-item flex items-center gap-3 border-l-2 px-4 py-2.5 font-body text-[13px] transition-all duration-150 ${
-                    isActive
-                      ? "border-primary bg-primary-ghost text-primary"
-                      : "border-transparent text-text-secondary hover:bg-bg-hover hover:text-text"
-                  }`
-                }
-              >
-                <NavIconRender icon={item.icon} isActive={location.pathname === item.path} />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
+        <nav className="flex flex-1 flex-col gap-3 overflow-y-auto pb-2">
+          {navGroups.map((group) => (
+            <div key={group.key} className="flex flex-col gap-0.5">
+              <div className="px-4 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                {group.label}
+              </div>
+              {group.items.map((item) => {
+                return (
+                  <NavLink
+                    key={item.key}
+                    to={item.path}
+                    end={item.path === "/"}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `nav-item flex items-center gap-3 border-l-2 px-4 py-2.5 font-body text-[13px] transition-all duration-150 ${
+                        isActive
+                          ? "border-primary bg-primary-ghost text-primary"
+                          : "border-transparent text-text-secondary hover:bg-bg-hover hover:text-text"
+                      }`
+                    }
+                  >
+                    <NavIconRender icon={item.icon} isActive={location.pathname === item.path} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Bottom: Settings */}
