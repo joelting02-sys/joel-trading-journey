@@ -24,6 +24,8 @@ export interface Trade {
   // 交易截图(压缩 base64 data URL,用户可附上自己的画线图表)
   images?: string[];
   account: string;
+  // SOP 合规:记录这笔交易符合哪些规则(rule id 数组)
+  sopCompliance?: string[];
 }
 
 // Prop firm 考试状态

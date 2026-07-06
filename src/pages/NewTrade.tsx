@@ -1,13 +1,13 @@
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { useState, useMemo, type FormEvent } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { ArrowLeft, Save, CheckCircle2, Circle, ChevronDown } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useTradeStore } from "@/store/useTradeStore";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, getActiveSopRules, getSopSetById } from "@/store/useSettings";
 import Select from "@/components/Select";
 import SymbolPicker from "@/components/SymbolPicker";
 import { formatSignedCurrencyConverted } from "@/utils/currency";
-import type { Trade, Direction, TradeStatus } from "@/types";
+import type { Trade, Direction, TradeStatus, SopCategory, SopRule } from "@/types";
 
 interface FormState {
   symbol: string;
@@ -21,6 +21,7 @@ interface FormState {
   openDate: string;
   closeDate: string;
   notes: string;
+  sopCompliance: string[];
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -36,6 +37,8 @@ export default function NewTrade() {
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
   const currency = useSettings((s) => s.currency);
+  const sopSets = useSettings((s) => s.sopSets);
+  const activeSopSetId = useSettings((s) => s.activeSopSetId);
 
   const [form, setForm] = useState<FormState>({
     symbol: "",
@@ -49,8 +52,40 @@ export default function NewTrade() {
     openDate: today(),
     closeDate: today(),
     notes: "",
+    sopCompliance: [],
   });
   const [errors, setErrors] = useState<{ symbol?: string; entryPrice?: string }>({});
+  const [showSopChecklist, setShowSopChecklist] = useState(false);
+
+  // 根据所选账户加载 SOP 规则(账户绑定了 sopSetId 就用它的,否则用当前激活的 SOP 集)
+  const selectedAccount = accounts.find((a) => a.id === form.account);
+  const sopRules = useMemo(() => {
+    const setId = selectedAccount?.sopSetId;
+    if (setId) return getSopSetById({ sopSets }, setId)?.rules ?? [];
+    return getActiveSopRules({ sopSets, activeSopSetId });
+  }, [selectedAccount, sopSets, activeSopSetId]);
+
+  const rulesByCategory = useMemo(() => {
+    const map: Record<SopCategory, SopRule[]> = { entry: [], exit: [], risk: [], psychology: [] };
+    for (const r of sopRules) map[r.category].push(r);
+    return map;
+  }, [sopRules]);
+
+  const categoryMeta: { key: SopCategory; label: string; dot: string }[] = [
+    { key: "entry", label: t.sopPage.entryRules, dot: "bg-primary" },
+    { key: "exit", label: t.sopPage.exitRules, dot: "bg-info" },
+    { key: "risk", label: t.sopPage.riskRules, dot: "bg-warning" },
+    { key: "psychology", label: t.sopPage.psychologyRules, dot: "bg-loss" },
+  ];
+
+  function toggleSopRule(ruleId: string) {
+    setForm((f) => ({
+      ...f,
+      sopCompliance: f.sopCompliance.includes(ruleId)
+        ? f.sopCompliance.filter((id) => id !== ruleId)
+        : [...f.sopCompliance, ruleId],
+    }));
+  }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -106,6 +141,7 @@ export default function NewTrade() {
       status: "closed",
       notes: form.notes.trim() || undefined,
       account: form.account,
+      sopCompliance: form.sopCompliance.length > 0 ? form.sopCompliance : undefined,
     };
     addTrade(trade);
     navigate("/trades");
@@ -238,6 +274,83 @@ export default function NewTrade() {
           <textarea id="notes" rows={3} value={form.notes} placeholder={t.newTradePage.notesPlaceholder}
             onChange={(e) => update("notes", e.target.value)}
             className="mt-1 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-primary" />
+        </div>
+
+        {/* SOP 合规检查清单 */}
+        <div className="mt-4 rounded-md border border-border bg-bg-surface">
+          <button
+            type="button"
+            onClick={() => setShowSopChecklist((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-text">{t.newTradePage.sopChecklist}</span>
+              {form.sopCompliance.length > 0 && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {form.sopCompliance.length}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-text-muted">{t.newTradePage.sopChecklistHint}</span>
+              <ChevronDown className={`h-4 w-4 text-text-muted transition-transform ${showSopChecklist ? "rotate-180" : ""}`} />
+            </div>
+          </button>
+
+          {showSopChecklist && (
+            <div className="border-t border-border px-4 py-3">
+              {sopRules.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-4 text-center">
+                  <p className="text-xs text-text-muted">{t.newTradePage.noSopRules}</p>
+                  <Link to="/sop" className="text-xs font-medium text-primary hover:opacity-80">
+                    {t.newTradePage.configureSop} →
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {categoryMeta.map(({ key, label, dot }) => {
+                    const rules = rulesByCategory[key];
+                    if (rules.length === 0) return null;
+                    return (
+                      <div key={key}>
+                        <div className="mb-1.5 flex items-center gap-1.5">
+                          <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+                          <span className="text-[11px] font-semibold text-text-secondary">{label}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {rules.map((rule) => {
+                            const checked = form.sopCompliance.includes(rule.id);
+                            return (
+                              <button
+                                key={rule.id}
+                                type="button"
+                                onClick={() => toggleSopRule(rule.id)}
+                                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-bg-hover"
+                              >
+                                {checked ? (
+                                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                ) : (
+                                  <Circle className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+                                )}
+                                <div className="min-w-0">
+                                  <div className={`text-xs font-medium ${checked ? "text-text" : "text-text-secondary"}`}>
+                                    {rule.title}
+                                  </div>
+                                  {rule.description && (
+                                    <div className="text-[11px] text-text-muted">{rule.description}</div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-border-subtle pt-4">

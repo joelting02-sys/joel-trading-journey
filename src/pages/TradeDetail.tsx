@@ -4,7 +4,7 @@ import { ArrowLeft, Check, ImagePlus, X, Expand, Loader2 } from "lucide-react";
 import Layout from "@/components/Layout";
 import Badge from "@/components/Badge";
 import { useTradeStore } from "@/store/useTradeStore";
-import { useSettings } from "@/store/useSettings";
+import { useSettings, getActiveSopRules, getSopSetById } from "@/store/useSettings";
 import { compressImageToDataUrl } from "@/services/aiService";
 import {
   formatCurrency,
@@ -12,6 +12,7 @@ import {
   formatPercent,
   calcHoldDays,
 } from "@/utils/format";
+import type { SopRule } from "@/types";
 import {
   formatCurrencyConverted,
   formatSignedCurrencyConverted,
@@ -25,11 +26,24 @@ export default function TradeDetail() {
   const updateTrade = useTradeStore((s) => s.updateTrade);
   const t = useSettings((s) => s.t());
   const currency = useSettings((s) => s.currency);
+  const sopSets = useSettings((s) => s.sopSets);
+  const activeSopSetId = useSettings((s) => s.activeSopSetId);
+  const language = useSettings((s) => s.language);
 
   const trade = trades.find((tr) => tr.id === id);
-  const accountName = trade
-    ? accounts.find((a) => a.id === trade.account)?.name ?? ""
-    : "";
+  const account = trade ? accounts.find((a) => a.id === trade.account) : undefined;
+  const accountName = account?.name ?? "";
+
+  // 加载该交易所属账户的 SOP 规则,用于显示合规信息
+  const sopRules: SopRule[] = (() => {
+    if (!trade) return [];
+    const setId = account?.sopSetId;
+    if (setId) return getSopSetById({ sopSets }, setId)?.rules ?? [];
+    return getActiveSopRules({ sopSets, activeSopSetId });
+  })();
+  const complianceRules = (trade?.sopCompliance ?? [])
+    .map((rid) => sopRules.find((r) => r.id === rid))
+    .filter((r): r is SopRule => Boolean(r));
 
   const [sopNotes, setSopNotes] = useState("");
   const [mindsetNotes, setMindsetNotes] = useState("");
@@ -39,7 +53,6 @@ export default function TradeDetail() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [lightbox, setLightbox] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const language = useSettings((s) => s.language);
 
   // 自动保存相关
   const skipNextSave = useRef(true); // 跳过 trade 切换后的首次同步
@@ -240,6 +253,42 @@ export default function TradeDetail() {
             <InfoCell label={t.tradeDetail.openDate} value={formatDate(trade.openDate)} />
             <InfoCell label={t.tradeDetail.closeDate} value={formatDate(trade.closeDate)} />
           </div>
+        </div>
+
+        {/* SOP 合规信息 */}
+        <div className="rounded-md border border-border bg-bg-surface px-5 py-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="font-display text-sm font-semibold text-text">
+              {t.tradeDetail.sopCompliance}
+            </span>
+            {complianceRules.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                {complianceRules.length}
+              </span>
+            )}
+          </div>
+          {complianceRules.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {complianceRules.map((rule) => {
+                const colorMap: Record<string, string> = {
+                  entry: "bg-primary/10 text-primary border-primary/20",
+                  exit: "bg-info/10 text-info border-info/20",
+                  risk: "bg-warning/10 text-warning border-warning/20",
+                  psychology: "bg-loss/10 text-loss border-loss/20",
+                };
+                return (
+                  <span
+                    key={rule.id}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${colorMap[rule.category] ?? "bg-bg-elevated text-text-secondary border-border"}`}
+                  >
+                    {rule.title}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted">{t.tradeDetail.noCompliance}</p>
+          )}
         </div>
 
         {/* Notes Editor */}

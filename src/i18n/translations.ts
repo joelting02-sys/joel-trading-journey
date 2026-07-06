@@ -111,6 +111,10 @@ export const translations = {
       symbolRequired: "Symbol is required",
       entryRequired: "Entry price is required",
       selectSymbol: "Select a symbol",
+      sopChecklist: "SOP Checklist",
+      sopChecklistHint: "Check the rules this trade followed",
+      noSopRules: "No SOP rules configured for this account",
+      configureSop: "Configure SOP",
     },
     // Trade Detail page
     tradeDetail: {
@@ -130,6 +134,8 @@ export const translations = {
       screenshots: "Trade Screenshots",
       screenshotsHint: "Attach your chart annotations or trade screenshots",
       addScreenshot: "Add Screenshot",
+      sopCompliance: "SOP Compliance",
+      noCompliance: "No rules checked for this trade",
     },
     // Analytics page
     analyticsPage: {
@@ -432,6 +438,10 @@ export const translations = {
       symbolRequired: "请选择品种",
       entryRequired: "请输入开仓价",
       selectSymbol: "选择品种",
+      sopChecklist: "SOP 合规检查",
+      sopChecklistHint: "勾选这笔交易遵守的规则",
+      noSopRules: "该账户尚未配置 SOP 规则",
+      configureSop: "去配置 SOP",
     },
     // 交易详情页
     tradeDetail: {
@@ -451,6 +461,8 @@ export const translations = {
       screenshots: "交易截图",
       screenshotsHint: "附上你的画线图表或交易截图",
       addScreenshot: "添加截图",
+      sopCompliance: "SOP 合规",
+      noCompliance: "这笔交易未勾选规则",
     },
     analyticsPage: {
       totalTrades: "总交易数",
