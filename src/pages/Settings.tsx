@@ -1,10 +1,10 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, AlertTriangle, RefreshCw, CalendarDays, FolderTree, FileJson, FolderCheck, ChevronRight, User } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, Trash2, Database, Palette, Info, Bot, Plus, Star, X, Eye, EyeOff, FolderOpen, AlertTriangle, RefreshCw, FolderTree, FileJson, FolderCheck, ChevronRight, User } from "lucide-react";
 import Layout from "@/components/Layout";
 import Select from "@/components/Select";
 import { useTradeStore } from "@/store/useTradeStore";
 import { useSettings, type CurrencyCode } from "@/store/useSettings";
-import type { AiConfigEntry, CalendarCountryCode, CalendarInstrumentCode, CalendarImportanceFilter } from "@/types";
+import type { AiConfigEntry } from "@/types";
 import type { Language } from "@/i18n/translations";
 import {
   isFileSystemSupported,
@@ -36,8 +36,6 @@ export default function Settings() {
   const updateAiConfigEntry = useSettings((s) => s.updateAiConfigEntry);
   const removeAiConfigEntry = useSettings((s) => s.removeAiConfigEntry);
   const setActiveAiConfigId = useSettings((s) => s.setActiveAiConfigId);
-  const calendarPrefs = useSettings((s) => s.calendarPrefs);
-  const setCalendarPrefs = useSettings((s) => s.setCalendarPrefs);
   const avatarUrl = useSettings((s) => s.avatarUrl);
   const supabaseUserEmail = useSettings((s) => s.supabaseUserEmail);
   const supabaseUrl = useSettings((s) => s.supabaseUrl);
@@ -483,7 +481,7 @@ export default function Settings() {
           {([
             { key: "account", label: language === "zh" ? "账户" : "Account", icon: <RefreshCw className="h-3.5 w-3.5" /> },
             { key: "general", label: language === "zh" ? "通用设置" : "General", icon: <SettingsIcon className="h-3.5 w-3.5" /> },
-            { key: "ai", label: language === "zh" ? "AI & 日历" : "AI & Calendar", icon: <Bot className="h-3.5 w-3.5" /> },
+            { key: "ai", label: language === "zh" ? "AI 助手" : "AI Assistant", icon: <Bot className="h-3.5 w-3.5" /> },
             { key: "data", label: language === "zh" ? "数据管理" : "Data", icon: <Database className="h-3.5 w-3.5" /> },
           ] as const).map((tab) => (
             <button
@@ -850,22 +848,6 @@ export default function Settings() {
               <p className="mt-3 text-xs text-text-muted">{t.settingsPage.aiConfigHint}</p>
             </SettingsSection>
 
-            {/* 经济日历偏好 - 用于 AI 周历汇总 */}
-            <SettingsSection
-              icon={<CalendarDays className="h-4 w-4" />}
-              title={language === "zh" ? "经济日历偏好" : "Economic Calendar Preferences"}
-              description={
-                language === "zh"
-                  ? "在 AI 面板点击「本周经济日历」时,AI 会按下方配置生成结构化周历。"
-                  : "Used by the AI Assistant's 'This Week's Calendar' quick action."
-              }
-            >
-              <CalendarPrefsEditor
-                prefs={calendarPrefs}
-                onChange={setCalendarPrefs}
-                language={language}
-              />
-            </SettingsSection>
           </>
         )}
         {activeTab === "data" && (
@@ -1245,285 +1227,3 @@ function getTimeAgo(dateStr: string, language: string): string {
   return `Active ${days}d ago`;
 }
 
-// 经济日历偏好编辑器(国家/品种/重要性三维度勾选 + 两个开关)
-function CalendarPrefsEditor({
-  prefs,
-  onChange,
-  language,
-}: {
-  prefs: import("@/types").CalendarPreferences;
-  onChange: (prefs: import("@/types").CalendarPreferences) => void;
-  language: Language;
-}) {
-  const isZh = language === "zh";
-
-  // 国家/地区配置(代码、旗帜、中英文名)
-  const countryOptions: { code: CalendarCountryCode; flag: string; nameZh: string; nameEn: string }[] = [
-    { code: "US", flag: "🇺🇸", nameZh: "美国", nameEn: "United States" },
-    { code: "EU", flag: "🇪🇺", nameZh: "欧元区", nameEn: "Eurozone" },
-    { code: "GB", flag: "🇬🇧", nameZh: "英国", nameEn: "United Kingdom" },
-    { code: "JP", flag: "🇯🇵", nameZh: "日本", nameEn: "Japan" },
-    { code: "AU", flag: "🇦🇺", nameZh: "澳大利亚", nameEn: "Australia" },
-    { code: "CA", flag: "🇨🇦", nameZh: "加拿大", nameEn: "Canada" },
-    { code: "CH", flag: "🇨🇭", nameZh: "瑞士", nameEn: "Switzerland" },
-    { code: "CN", flag: "🇨🇳", nameZh: "中国", nameEn: "China" },
-    { code: "NZ", flag: "🇳🇿", nameZh: "新西兰", nameEn: "New Zealand" },
-  ];
-
-  // 品种配置(标签 + 分组)
-  const instrumentOptions: { code: CalendarInstrumentCode; label: string; group: "forex" | "metals" | "indices" }[] = [
-    { code: "EURUSD", label: "EUR/USD", group: "forex" },
-    { code: "AUDUSD", label: "AUD/USD", group: "forex" },
-    { code: "GBPUSD", label: "GBP/USD", group: "forex" },
-    { code: "USDJPY", label: "USD/JPY", group: "forex" },
-    { code: "USDCAD", label: "USD/CAD", group: "forex" },
-    { code: "EURJPY", label: "EUR/JPY", group: "forex" },
-    { code: "GBPJPY", label: "GBP/JPY", group: "forex" },
-    { code: "AUDJPY", label: "AUD/JPY", group: "forex" },
-    { code: "EURGBP", label: "EUR/GBP", group: "forex" },
-    { code: "XAUUSD", label: "Gold (XAU/USD)", group: "metals" },
-    { code: "XAGUSD", label: "Silver (XAG/USD)", group: "metals" },
-    { code: "Copper", label: "Copper", group: "metals" },
-    { code: "US500", label: "S&P 500 (US500)", group: "indices" },
-    { code: "US30", label: "Dow Jones (US30)", group: "indices" },
-    { code: "NAS100", label: "Nasdaq (NAS100)", group: "indices" },
-    { code: "GER40", label: "DAX (GER40)", group: "indices" },
-  ];
-
-  // 切换国家勾选
-  function toggleCountry(code: CalendarCountryCode) {
-    const has = prefs.countries.includes(code);
-    onChange({
-      ...prefs,
-      countries: has ? prefs.countries.filter((c) => c !== code) : [...prefs.countries, code],
-    });
-  }
-
-  // 切换品种勾选
-  function toggleInstrument(code: CalendarInstrumentCode) {
-    const has = prefs.instruments.includes(code);
-    onChange({
-      ...prefs,
-      instruments: has ? prefs.instruments.filter((c) => c !== code) : [...prefs.instruments, code],
-    });
-  }
-
-  // 全选/全清当前分组品种
-  function toggleInstrumentGroup(group: "forex" | "metals" | "indices") {
-    const groupInstruments = instrumentOptions.filter((i) => i.group === group).map((i) => i.code);
-    const allSelected = groupInstruments.every((c) => prefs.instruments.includes(c));
-    if (allSelected) {
-      onChange({ ...prefs, instruments: prefs.instruments.filter((c) => !groupInstruments.includes(c)) });
-    } else {
-      const merged = new Set([...prefs.instruments, ...groupInstruments]);
-      onChange({ ...prefs, instruments: Array.from(merged) });
-    }
-  }
-
-  // 全部国家
-  function toggleAllCountries() {
-    if (prefs.countries.length === countryOptions.length) {
-      onChange({ ...prefs, countries: [] });
-    } else {
-      onChange({ ...prefs, countries: countryOptions.map((c) => c.code) });
-    }
-  }
-
-  // 全部品种
-  function toggleAllInstruments() {
-    if (prefs.instruments.length === instrumentOptions.length) {
-      onChange({ ...prefs, instruments: [] });
-    } else {
-      onChange({ ...prefs, instruments: instrumentOptions.map((i) => i.code) });
-    }
-  }
-
-  // 重要性筛选
-  const importanceOptions: { value: CalendarImportanceFilter; labelZh: string; labelEn: string; hint: string }[] = [
-    { value: "high_only", labelZh: "仅高(⭐⭐⭐)", labelEn: "High only (⭐⭐⭐)", hint: isZh ? "只看对市场影响最大的事件" : "Major market movers only" },
-    { value: "medium_and_high", labelZh: "中+高(⭐⭐以上)", labelEn: "Medium & High (⭐⭐+)", hint: isZh ? "推荐设置,平衡信息密度" : "Recommended, balanced" },
-    { value: "all", labelZh: "全部(⭐及以上)", labelEn: "All (⭐+)", hint: isZh ? "包含低重要性事件" : "Include low importance" },
-  ];
-
-  const groupLabels: Record<"forex" | "metals" | "indices", { zh: string; en: string }> = {
-    forex: { zh: "外汇", en: "Forex" },
-    metals: { zh: "贵金属/工业金属", en: "Metals" },
-    indices: { zh: "指数", en: "Indices" },
-  };
-
-  return (
-    <div className="flex flex-col gap-5">
-      {/* 国家勾选 */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-text-secondary">
-            {isZh ? "关注的国家/地区" : "Focus Countries"}
-          </span>
-          <button
-            type="button"
-            onClick={toggleAllCountries}
-            className="text-[11px] text-text-muted transition-colors hover:text-primary"
-          >
-            {prefs.countries.length === countryOptions.length
-              ? (isZh ? "全部取消" : "Deselect All")
-              : (isZh ? "全选" : "Select All")}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {countryOptions.map((c) => {
-            const checked = prefs.countries.includes(c.code);
-            return (
-              <label
-                key={c.code}
-                className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-                  checked
-                    ? "border-primary/50 bg-primary/5 text-text"
-                    : "border-border bg-bg-elevated text-text-muted hover:border-text-muted hover:text-text"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleCountry(c.code)}
-                  className="h-3.5 w-3.5 cursor-pointer accent-primary"
-                />
-                <span className="text-base leading-none">{c.flag}</span>
-                <span className="font-medium">{isZh ? c.nameZh : c.nameEn}</span>
-                <span className="ml-auto text-[10px] text-text-muted">{c.code}</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 品种勾选 */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-text-secondary">
-            {isZh ? "关注的交易品种" : "Focus Instruments"}
-          </span>
-          <button
-            type="button"
-            onClick={toggleAllInstruments}
-            className="text-[11px] text-text-muted transition-colors hover:text-primary"
-          >
-            {prefs.instruments.length === instrumentOptions.length
-              ? (isZh ? "全部取消" : "Deselect All")
-              : (isZh ? "全选" : "Select All")}
-          </button>
-        </div>
-        <div className="flex flex-col gap-3">
-          {(["forex", "metals", "indices"] as const).map((group) => {
-            const groupInstruments = instrumentOptions.filter((i) => i.group === group);
-            const allSelected = groupInstruments.every((i) => prefs.instruments.includes(i.code));
-            return (
-              <div key={group}>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="text-[11px] font-medium text-text-muted">
-                    {isZh ? groupLabels[group].zh : groupLabels[group].en}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleInstrumentGroup(group)}
-                    className="text-[10px] text-text-muted transition-colors hover:text-primary"
-                  >
-                    {allSelected ? (isZh ? "取消该组" : "Clear group") : (isZh ? "选择该组" : "Select group")}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
-                  {groupInstruments.map((inst) => {
-                    const checked = prefs.instruments.includes(inst.code);
-                    return (
-                      <label
-                        key={inst.code}
-                        className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                          checked
-                            ? "border-primary/50 bg-primary/5 text-text"
-                            : "border-border bg-bg-elevated text-text-muted hover:border-text-muted hover:text-text"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleInstrument(inst.code)}
-                          className="h-3 w-3 cursor-pointer accent-primary"
-                        />
-                        <span className="font-medium">{inst.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 重要性筛选 */}
-      <div>
-        <span className="mb-2 block text-xs font-semibold text-text-secondary">
-          {isZh ? "重要性筛选" : "Importance Filter"}
-        </span>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {importanceOptions.map((opt) => {
-            const selected = prefs.importance === opt.value;
-            return (
-              <label
-                key={opt.value}
-                className={`flex cursor-pointer flex-col gap-0.5 rounded-md border px-3 py-2 transition-colors ${
-                  selected
-                    ? "border-primary/50 bg-primary/5"
-                    : "border-border bg-bg-elevated hover:border-text-muted"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="calendar-importance"
-                    checked={selected}
-                    onChange={() => onChange({ ...prefs, importance: opt.value })}
-                    className="h-3.5 w-3.5 cursor-pointer accent-primary"
-                  />
-                  <span className="text-xs font-semibold text-text">
-                    {isZh ? opt.labelZh : opt.labelEn}
-                  </span>
-                </div>
-                <span className="pl-5 text-[10px] text-text-muted">{opt.hint}</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 附加开关 */}
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
-        <ToggleRow
-          label={isZh ? "包含银行休市信息" : "Include Bank Holidays"}
-          hint={
-            isZh
-              ? "列出本周相关国家/地区的银行或交易所休市情况"
-              : "List bank/exchange holidays in focus countries"
-          }
-          checked={prefs.includeBankHolidays}
-          onChange={(v) => onChange({ ...prefs, includeBankHolidays: v })}
-        />
-        <ToggleRow
-          label={isZh ? "数据公布后标注市场情绪" : "Mark Market Sentiment After Release"}
-          hint={
-            isZh
-              ? "对已公布数据标注📈看多/📉看空/➖中性,并用通俗语言解释"
-              : "Annotate 📈 Bullish / 📉 Bearish / ➖ Neutral for released data"
-          }
-          checked={prefs.includeSentiment}
-          onChange={(v) => onChange({ ...prefs, includeSentiment: v })}
-        />
-      </div>
-
-      <div className="rounded-md border border-dashed border-border bg-bg-elevated/40 px-3 py-2 text-[11px] text-text-muted">
-        💡 {isZh
-          ? "点击 AI 面板的「📅 本周经济日历」按钮即可让 AI 生成结构化周历。LLM 训练数据可能滞后,实际公布时间以 Investing.com / TradingEconomics / Forex Factory 为准。"
-          : "Click the '📅 This Week's Calendar' button in the AI panel. LLM data may be stale; verify on Investing.com / TradingEconomics / Forex Factory."}
-      </div>
-    </div>
-  );
-}

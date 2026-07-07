@@ -54,14 +54,32 @@ const ACCENT_PURPLE = "#845ef7";
 const ACCENT_ORANGE = "#f59f00";
 const ACCENT_BLUE = "#339af0";
 
-// 创建渐变函数
-const createGradient = (ctx: CanvasRenderingContext2D | null, color1: string, color2: string, height: number) => {
-  if (!ctx) return color1;
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, color1);
-  gradient.addColorStop(1, color2);
-  return gradient;
+// 基于真实图表画布的可脚本化渐变(修复此前脱离画布渐变导致的渲染异常)
+type ScriptableCtx = {
+  chart: { ctx: CanvasRenderingContext2D; chartArea?: { top: number; bottom: number } };
+  parsed?: { y?: number };
 };
+
+const verticalGradient = (c: ScriptableCtx, from: string, to: string): CanvasGradient | string => {
+  const { ctx, chartArea } = c.chart;
+  if (!chartArea) return to;
+  const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+  g.addColorStop(0, from);
+  g.addColorStop(1, to);
+  return g;
+};
+
+// 盈/亏柱渐变(按数值正负自动选色)
+const pnlBarGradient = (c: ScriptableCtx) => {
+  const v = c.parsed?.y ?? 0;
+  return v >= 0
+    ? verticalGradient(c, PRIMARY_LIGHT, PRIMARY)
+    : verticalGradient(c, LOSS_LIGHT, LOSS);
+};
+
+// 面积填充渐变
+const areaGradient = (color: string) => (c: ScriptableCtx) =>
+  verticalGradient(c, color + "30", color + "02");
 
 // 通用 tooltip 样式 - 玻璃态效果
 const tooltipStyle = {
@@ -152,13 +170,11 @@ export default function Analytics() {
             type: "bar" as const,
             label: language === "zh" ? "月度盈亏" : "Monthly P&L",
             data: monthlyData.map((m) => m.pnl),
-            backgroundColor: monthlyData.map((m) =>
-              m.pnl >= 0
-                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "dd", PRIMARY + "cc", 280)
-                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "dd", LOSS + "cc", 280)
-            ),
+            backgroundColor: pnlBarGradient,
+            hoverBackgroundColor: (c: ScriptableCtx) =>
+              (c.parsed?.y ?? 0) >= 0 ? PRIMARY_LIGHT : LOSS_LIGHT,
             borderRadius: 6,
-            maxBarThickness: 28,
+            maxBarThickness: 30,
             borderSkipped: false as const,
             yAxisID: "y",
             order: 2,
@@ -168,22 +184,19 @@ export default function Analytics() {
             label: language === "zh" ? "累计盈亏" : "Cumulative",
             data: monthlyData.map((m) => m.cumulative),
             borderColor: ACCENT_PURPLE,
-            backgroundColor: (() => {
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              return createGradient(ctx, ACCENT_PURPLE + "30", ACCENT_PURPLE + "00", 280);
-            })(),
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: ACCENT_PURPLE,
-            pointBorderColor: "#ffffff",
+            backgroundColor: "transparent",
+            fill: false,
+            tension: 0.35,
+            pointRadius: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: ACCENT_PURPLE,
             pointBorderWidth: 2,
-            pointHoverRadius: 7,
+            pointHoverRadius: 6,
             pointHoverBackgroundColor: ACCENT_PURPLE,
             pointHoverBorderColor: "#ffffff",
-            pointHoverBorderWidth: 3,
-            borderWidth: 2.5,
+            pointHoverBorderWidth: 2,
+            borderWidth: 2,
+            borderDash: [0, 0],
             yAxisID: "y1",
             order: 1,
           },
@@ -193,6 +206,20 @@ export default function Analytics() {
         ...base,
         plugins: {
           ...base.plugins,
+          legend: {
+            display: true,
+            position: "top" as const,
+            align: "end" as const,
+            labels: {
+              usePointStyle: true,
+              pointStyle: "circle" as const,
+              boxWidth: 6,
+              boxHeight: 6,
+              padding: 16,
+              color: "#868e96",
+              font: { family: INTER, size: 11, weight: 500 as const },
+            },
+          },
           tooltip: {
             ...tooltipStyle,
             callbacks: {
@@ -236,11 +263,7 @@ export default function Analytics() {
             label: language === "zh" ? "胜率" : "Win Rate",
             data: monthlyData.map((m) => m.winRate),
             borderColor: PRIMARY,
-            backgroundColor: (() => {
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              return createGradient(ctx, PRIMARY + "35", PRIMARY + "00", 280);
-            })(),
+            backgroundColor: areaGradient(PRIMARY),
             fill: true,
             tension: 0.4,
             pointRadius: 5,
@@ -284,11 +307,12 @@ export default function Analytics() {
           {
             label: language === "zh" ? "交易数" : "Trades",
             data: distData.map((d) => d.count),
-            backgroundColor: distData.map((d) =>
-              d.pnl >= 0
-                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "cc", PRIMARY + "bb", 280)
-                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "cc", LOSS + "bb", 280)
-            ),
+            backgroundColor: (c: ScriptableCtx & { dataIndex?: number }) => {
+              const d = distData[c.dataIndex ?? 0];
+              return d && d.pnl >= 0
+                ? verticalGradient(c, PRIMARY_LIGHT, PRIMARY)
+                : verticalGradient(c, LOSS_LIGHT, LOSS);
+            },
             borderRadius: 6,
             maxBarThickness: 32,
             borderSkipped: false as const,
@@ -340,10 +364,8 @@ export default function Analytics() {
         datasets: [
           {
             data: [ds.long.count, ds.short.count],
-            backgroundColor: [
-              createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT, PRIMARY, 200),
-              createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT, LOSS, 200),
-            ],
+            backgroundColor: [PRIMARY, LOSS],
+            hoverBackgroundColor: [PRIMARY_LIGHT, LOSS_LIGHT],
             borderColor: "#ffffff",
             borderWidth: 3,
             hoverOffset: 10,
@@ -397,11 +419,9 @@ export default function Analytics() {
           {
             label: language === "zh" ? "盈亏" : "P&L",
             data: dow.map((d) => d.pnl),
-            backgroundColor: dow.map((d) =>
-              d.pnl >= 0
-                ? createGradient(document.createElement("canvas").getContext("2d"), PRIMARY_LIGHT + "dd", PRIMARY + "cc", 280)
-                : createGradient(document.createElement("canvas").getContext("2d"), LOSS_LIGHT + "dd", LOSS + "cc", 280)
-            ),
+            backgroundColor: pnlBarGradient,
+            hoverBackgroundColor: (c: ScriptableCtx) =>
+              (c.parsed?.y ?? 0) >= 0 ? PRIMARY_LIGHT : LOSS_LIGHT,
             borderRadius: 6,
             maxBarThickness: 30,
             borderSkipped: false as const,
@@ -526,32 +546,46 @@ export default function Analytics() {
 
   return (
     <Layout title={t.title.analytics}>
-      {/* ===== Hero 总览卡:净盈亏 + 核心指标(深色高级质感) ===== */}
-      <div className="relative mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 shadow-[0_16px_48px_-16px_rgba(15,23,42,0.5)]">
-        {/* 装饰性光斑 */}
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
+      {/* ===== 总览卡:净盈亏 + 核心指标(浅色精致质感) ===== */}
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        {/* 顶部渐变装饰条 */}
+        <div
+          className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${
+            metrics.netPnl >= 0
+              ? "from-primary/70 via-primary/30 to-transparent"
+              : "from-loss/70 via-loss/30 to-transparent"
+          }`}
+        />
+        {/* 柔和背景晕染 */}
+        <div
+          className={`pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full blur-3xl ${
+            metrics.netPnl >= 0 ? "bg-primary/[0.06]" : "bg-loss/[0.06]"
+          }`}
+        />
 
         <div className="relative flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:gap-10 lg:px-8">
           {/* 净盈亏主体 */}
           <div className="shrink-0">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10">
-                <DollarSign className={`h-4 w-4 ${metrics.netPnl >= 0 ? "text-emerald-400" : "text-red-400"}`} />
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  metrics.netPnl >= 0 ? "bg-primary/10 text-primary" : "bg-loss/10 text-loss"
+                }`}
+              >
+                <DollarSign className="h-4 w-4" />
               </span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
                 {t.analyticsPage.netPnl}
               </span>
             </div>
             <div
               className={`tj-number mt-3 text-4xl font-bold tracking-tight lg:text-[42px] ${
-                metrics.netPnl >= 0 ? "text-emerald-400" : "text-red-400"
+                metrics.netPnl >= 0 ? "text-primary" : "text-loss"
               }`}
             >
               {formatSignedCurrencyConverted(metrics.netPnl, currency, 0)}
             </div>
-            <div className="mt-1.5 text-[11px] text-slate-500">
+            <div className="mt-1.5 text-[11px] text-text-muted">
               {language === "zh"
                 ? `基于 ${metrics.totalTrades} 笔已平仓交易`
                 : `Based on ${metrics.totalTrades} closed trades`}
@@ -559,7 +593,7 @@ export default function Analytics() {
           </div>
 
           {/* 分隔线 */}
-          <div className="hidden h-16 w-px bg-white/10 lg:block" />
+          <div className="hidden h-16 w-px bg-border/70 lg:block" />
 
           {/* 核心指标内联 */}
           <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
@@ -567,13 +601,13 @@ export default function Analytics() {
               const Icon = s.icon;
               return (
                 <div key={s.label} className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
                     <Icon className="h-3 w-3" />
                     <span className="truncate">{s.label}</span>
                   </div>
                   <div
                     className={`tj-number mt-2 text-xl font-bold tracking-tight lg:text-2xl ${
-                      s.good === null ? "text-slate-100" : s.good ? "text-emerald-400" : "text-red-400"
+                      s.good === null ? "text-text" : s.good ? "text-primary" : "text-loss"
                     }`}
                   >
                     {s.value}
