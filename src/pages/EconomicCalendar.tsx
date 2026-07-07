@@ -8,33 +8,36 @@ export default function EconomicCalendar() {
   const language = useSettings((s) => s.language);
   const calendarPrefs = useSettings((s) => s.calendarPrefs);
 
-  // Investing.com 官方 embed widget URL（专用域名，不受 X-Frame-Options 限制）
-  // 数据来源：英为财情 (Investing.com 中国版)
+  // TradingView 官方经济日历 Widget（支持 iframe 嵌入，稳定可靠）
+  // 之前的 Investing.com widget 已被 Cloudflare 拦截（403 + X-Frame-Options），无法在 iframe 中显示
   const iframeSrc = useMemo(() => {
-    // 重要性筛选
-    let importanceParam = "";
+    // 重要性筛选：TradingView 使用 -1(低) / 0(中) / 1(高)
+    let importanceFilter = "-1,0,1";
     switch (calendarPrefs.importance) {
       case "high_only":
-        importanceParam = "importance=3";
+        importanceFilter = "1";
         break;
       case "medium_and_high":
-        importanceParam = "importance=2,3";
+        importanceFilter = "0,1";
         break;
       default:
-        importanceParam = "importance=1,2,3";
+        importanceFilter = "-1,0,1";
     }
 
-    // 必填参数：columns / importance / countries
-    // 可选参数：calId（特定日历）、lang（语言）
-    const params = new URLSearchParams({
-      columns: "exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous",
-      importance: importanceParam.replace("importance=", ""),
-      countries: "25,32,6,37,72,5,22,39,14,10,35,17,43,12,4,26,48,9,68,42,36,56,110",
-      calId: "",  // 主日历
-      lang: language === "zh" ? "54" : "1",  // 54=简体中文, 1=English
-    });
+    const config = {
+      colorTheme: "light",
+      isTransparent: false,
+      width: "100%",
+      height: "100%",
+      locale: language === "zh" ? "zh_CN" : "en",
+      importanceFilter,
+      countryFilter:
+        "us,eu,cn,jp,gb,au,nz,ca,ch,de,fr,it,es,hk,sg,kr,in,my",
+    };
 
-    return `https://sslecal2.forexprostools.com?${params.toString()}`;
+    return `https://s.tradingview.com/embed-widget/events/?locale=${
+      language === "zh" ? "zh_CN" : "en"
+    }#${encodeURIComponent(JSON.stringify(config))}`;
   }, [calendarPrefs.importance, language]);
 
   return (
@@ -49,13 +52,17 @@ export default function EconomicCalendar() {
             </h1>
             <p className="text-[11px] text-text-muted">
               {language === "zh"
-                ? "实时全球经济事件数据,由英为财情 (Investing.com) 提供"
-                : "Real-time global economic events, powered by Investing.com"}
+                ? "实时全球经济事件数据,由 TradingView 提供"
+                : "Real-time global economic events, powered by TradingView"}
             </p>
           </div>
           {/* 备用入口 */}
           <a
-            href="https://cn.investing.com/economic-calendar/"
+            href={
+              language === "zh"
+                ? "https://cn.tradingview.com/economic-calendar/"
+                : "https://www.tradingview.com/economic-calendar/"
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-primary/40 hover:text-primary"
@@ -65,17 +72,17 @@ export default function EconomicCalendar() {
           </a>
         </div>
 
-        {/* Investing.com 经济日历 Widget iframe */}
+        {/* TradingView 经济日历 Widget iframe */}
         <div
           className="overflow-hidden rounded-lg border border-border bg-bg-surface shadow-sm"
           style={{ height: "calc(100vh - 180px)", minHeight: "560px" }}
         >
           <iframe
+            key={iframeSrc}
             src={iframeSrc}
-            title="Investing.com Economic Calendar"
+            title="TradingView Economic Calendar"
             style={{ width: "100%", height: "100%", border: "none" }}
             allow="clipboard-write"
-            loading="lazy"
           />
         </div>
 
@@ -89,12 +96,12 @@ export default function EconomicCalendar() {
           <div className="flex items-center gap-1">
             <span>{language === "zh" ? "数据来源" : "Powered by"}</span>
             <a
-              href="https://www.investing.com/"
+              href="https://www.tradingview.com/"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-0.5 text-text-secondary hover:text-text"
             >
-              Investing.com
+              TradingView
               <ExternalLink className="h-2.5 w-2.5" />
             </a>
           </div>

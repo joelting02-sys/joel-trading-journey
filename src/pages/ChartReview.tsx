@@ -14,7 +14,7 @@ function toTvSymbol(symbol: string): string {
   if (s === "US30") return "FOREXCOM:US30";
   if (s.includes("XAUUSD")) return "OANDA:XAUUSD";
   if (s.includes("XAGUSD")) return "OANDA:XAGUSD";
-  
+
   // For FX pairs
   const fxPairs = ["EURUSD", "AUDUSD", "GBPUSD", "USDJPY", "USDCAD"];
   if (fxPairs.includes(s)) {
@@ -22,6 +22,9 @@ function toTvSymbol(symbol: string): string {
   }
   return s;
 }
+
+// 图表默认打开的品种（图表内可自由切换,无需外部选择器）
+const DEFAULT_CHART_SYMBOL = "EUR/USD";
 
 export default function ChartReview() {
   const language = useSettings((s) => s.language);
@@ -31,13 +34,12 @@ export default function ChartReview() {
   const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const addTrade = useTradeStore((s) => s.addTrade);
 
-  // 状态
-  const [selectedSymbol, setSelectedSymbol] = useState("EUR/USD");
   const interval = "D";
   const [selectedAccountId, setSelectedAccountId] = useState(activeAccountId);
 
-  // 交易表单状态
+  // 交易表单状态（底部弹出面板）
   const [showForm, setShowForm] = useState(false);
+  const [formSymbol, setFormSymbol] = useState(DEFAULT_CHART_SYMBOL);
   const [formDirection, setFormDirection] = useState<Direction>("long");
   const [formEntryPrice, setFormEntryPrice] = useState("");
   const [formExitPrice, setFormExitPrice] = useState("");
@@ -65,7 +67,7 @@ export default function ChartReview() {
     document.head.appendChild(script);
   }, []);
 
-  // 初始化 & 联动更新 TradingView Widget
+  // 初始化 TradingView Widget（图表内置品种切换,无需外部联动）
   useEffect(() => {
     if (!tvLoaded || !(window as any).TradingView) return;
 
@@ -73,11 +75,9 @@ export default function ChartReview() {
     if (!container) return;
     container.innerHTML = "";
 
-    const tvSymbol = toTvSymbol(selectedSymbol);
-
     new (window as any).TradingView.widget({
       "autosize": true,
-      "symbol": tvSymbol,
+      "symbol": toTvSymbol(DEFAULT_CHART_SYMBOL),
       "interval": interval,
       "timezone": "Etc/UTC",
       "theme": "light", // 浅色主题以契合系统整体风格
@@ -95,7 +95,17 @@ export default function ChartReview() {
       "popup_width": "1000",
       "popup_height": "650",
     });
-  }, [tvLoaded, selectedSymbol, interval, language]);
+  }, [tvLoaded, interval, language]);
+
+  // Esc 键关闭面板
+  useEffect(() => {
+    if (!showForm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowForm(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showForm]);
 
   // ========== 保存交易记录 ==========
   const handleSaveTrade = () => {
@@ -118,7 +128,7 @@ export default function ChartReview() {
 
     const newTrade: Trade = {
       id: `trade_${Date.now()}`,
-      symbol: selectedSymbol,
+      symbol: formSymbol,
       direction: formDirection,
       entryPrice: entry,
       exitPrice: exit,
@@ -153,19 +163,8 @@ export default function ChartReview() {
 
   return (
     <Layout title={language === "zh" ? "图表复盘" : "Chart Review"}>
-      {/* 顶部控制栏 */}
+      {/* 顶部控制栏（品种切换已内置于图表,此处仅保留账户选择） */}
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-bg-surface p-4">
-        {/* 品种选择 */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-text-muted">
-            {language === "zh" ? "品种" : "Symbol"}
-          </label>
-          <SymbolPicker value={selectedSymbol} onChange={setSelectedSymbol} language={language} />
-        </div>
-
-        <div className="h-8 w-px bg-border" />
-
-        {/* 账户选择 */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-text-muted">
             {language === "zh" ? "账户" : "Account"}
@@ -180,16 +179,11 @@ export default function ChartReview() {
             placeholder={language === "zh" ? "选择账户" : "Select Account"}
           />
         </div>
-
-        <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            <Plus size={16} />
-            {language === "zh" ? "记录复盘交易" : "Log Trade"}
-          </button>
-        </div>
+        <p className="ml-auto hidden text-[11px] text-text-muted sm:block">
+          {language === "zh"
+            ? "提示:可直接在图表左上角切换品种与周期"
+            : "Tip: switch symbol & timeframe directly in the chart"}
+        </p>
       </div>
 
       {/* 图表区域 */}
@@ -200,7 +194,7 @@ export default function ChartReview() {
               <BarChart3 className="h-3.5 w-3.5 text-primary" />
             </div>
             <span className="font-display text-sm font-semibold text-text">
-              TradingView {language === "zh" ? "专业图表画布" : "Chart Canvas"} ({selectedSymbol})
+              TradingView {language === "zh" ? "专业图表画布" : "Chart Canvas"}
             </span>
           </div>
         </div>
@@ -215,173 +209,207 @@ export default function ChartReview() {
         </div>
       </div>
 
-      {/* 添加交易表单 */}
+      {/* 底部悬浮入口:记录复盘交易 */}
+      {!showForm && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-float transition-all hover:scale-[1.03] hover:opacity-95 active:scale-100"
+        >
+          <Plus size={18} />
+          {language === "zh" ? "记录复盘交易" : "Log Trade"}
+        </button>
+      )}
+
+      {/* 底部弹出面板:添加复盘记录 */}
       {showForm && (
-        <div className="mb-4 rounded-xl border border-border bg-bg-surface p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Plus className="h-4 w-4 text-primary" />
-              <span className="font-display text-sm font-semibold text-text">
-                {language === "zh" ? "记录复盘交易" : "Log Review Trade"}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowForm(false)}
-              className="text-text-muted hover:text-text-secondary"
-            >
-              <X size={18} />
-            </button>
-          </div>
+        <>
+          {/* 遮罩 */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] animate-fade-in"
+            onClick={() => setShowForm(false)}
+          />
+          {/* 面板 */}
+          <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
+            <div className="mx-auto max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-b-0 border-border bg-bg-surface p-5 shadow-float tj-scroll">
+              {/* 拖拽指示条 */}
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
 
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {/* 方向 */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                {language === "zh" ? "方向" : "Direction"}
-              </label>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setFormDirection("long")}
-                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    formDirection === "long"
-                      ? "bg-primary text-white"
-                      : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-                  }`}
-                >
-                  {language === "zh" ? "做多" : "Long"}
-                </button>
-                <button
-                  onClick={() => setFormDirection("short")}
-                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    formDirection === "short"
-                      ? "bg-loss text-white"
-                      : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
-                  }`}
-                >
-                  {language === "zh" ? "做空" : "Short"}
-                </button>
-              </div>
-            </div>
-
-            {/* 入场价 */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                {language === "zh" ? "入场价" : "Entry Price"}
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                value={formEntryPrice}
-                onChange={(e) => setFormEntryPrice(e.target.value)}
-                placeholder="1.0800"
-                className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
-              />
-            </div>
-
-            {/* 出场价 */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                {language === "zh" ? "出场价" : "Exit Price"}
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                value={formExitPrice}
-                onChange={(e) => setFormExitPrice(e.target.value)}
-                placeholder="1.0900"
-                className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
-              />
-            </div>
-
-            {/* 手数 */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                {language === "zh" ? "手数" : "Lots"}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formQuantity}
-                onChange={(e) => setFormQuantity(e.target.value)}
-                className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
-              />
-            </div>
-
-            {/* 日期 */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                {language === "zh" ? "日期" : "Date"}
-              </label>
-              <input
-                type="date"
-                value={formDate}
-                onChange={(e) => setFormDate(e.target.value)}
-                className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
-              />
-            </div>
-
-            {/* 盈亏预览 */}
-            {formEntryPrice && formExitPrice && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-muted">
-                  {language === "zh" ? "预估盈亏" : "Est. P&L"}
-                </label>
-                <div
-                  className={`tj-number rounded-md bg-bg-elevated px-3 py-2 text-sm font-bold ${
-                    (formDirection === "long"
-                      ? parseFloat(formExitPrice) - parseFloat(formEntryPrice)
-                      : parseFloat(formEntryPrice) - parseFloat(formExitPrice)) >= 0
-                      ? "text-primary"
-                      : "text-loss"
-                  }`}
-                >
-                  {formatCurrency(
-                    (formDirection === "long"
-                      ? parseFloat(formExitPrice) - parseFloat(formEntryPrice)
-                      : parseFloat(formEntryPrice) - parseFloat(formExitPrice)) *
-                      (parseFloat(formQuantity) || 1) *
-                      1000
-                  )}
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                    <Plus className="h-4 w-4 text-primary" />
+                  </div>
+                  <span className="font-display text-sm font-semibold text-text">
+                    {language === "zh" ? "记录复盘交易" : "Log Review Trade"}
+                  </span>
                 </div>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="rounded-md p-1 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+                >
+                  <X size={18} />
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* 备注 */}
-          <div className="mt-4 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-muted">
-              {language === "zh" ? "复盘笔记 / SOP 备注" : "Review Notes / SOP"}
-            </label>
-            <textarea
-              value={formNotes}
-              onChange={(e) => setFormNotes(e.target.value)}
-              rows={3}
-              placeholder={
-                language === "zh"
-                  ? "记录交易思路、SOP 执行情况、情绪状态..."
-                  : "Record your trading thoughts, SOP execution, mindset..."
-              }
-              className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {/* 品种 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "品种" : "Symbol"}
+                  </label>
+                  <SymbolPicker value={formSymbol} onChange={setFormSymbol} language={language} />
+                </div>
 
-          {/* 保存按钮 */}
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setShowForm(false)}
-              className="rounded-md border border-border bg-bg-elevated px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover"
-            >
-              {language === "zh" ? "取消" : "Cancel"}
-            </button>
-            <button
-              onClick={handleSaveTrade}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              <Save size={16} />
-              {language === "zh" ? "保存交易" : "Save Trade"}
-            </button>
+                {/* 方向 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "方向" : "Direction"}
+                  </label>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setFormDirection("long")}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                        formDirection === "long"
+                          ? "bg-primary text-white"
+                          : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
+                      }`}
+                    >
+                      {language === "zh" ? "做多" : "Long"}
+                    </button>
+                    <button
+                      onClick={() => setFormDirection("short")}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                        formDirection === "short"
+                          ? "bg-loss text-white"
+                          : "bg-bg-elevated text-text-secondary hover:bg-bg-hover"
+                      }`}
+                    >
+                      {language === "zh" ? "做空" : "Short"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 入场价 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "入场价" : "Entry Price"}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={formEntryPrice}
+                    onChange={(e) => setFormEntryPrice(e.target.value)}
+                    placeholder="1.0800"
+                    className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* 出场价 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "出场价" : "Exit Price"}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={formExitPrice}
+                    onChange={(e) => setFormExitPrice(e.target.value)}
+                    placeholder="1.0900"
+                    className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* 手数 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "手数" : "Lots"}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formQuantity}
+                    onChange={(e) => setFormQuantity(e.target.value)}
+                    className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* 日期 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-text-muted">
+                    {language === "zh" ? "日期" : "Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* 盈亏预览 */}
+                {formEntryPrice && formExitPrice && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-text-muted">
+                      {language === "zh" ? "预估盈亏" : "Est. P&L"}
+                    </label>
+                    <div
+                      className={`tj-number rounded-md bg-bg-elevated px-3 py-2 text-sm font-bold ${
+                        (formDirection === "long"
+                          ? parseFloat(formExitPrice) - parseFloat(formEntryPrice)
+                          : parseFloat(formEntryPrice) - parseFloat(formExitPrice)) >= 0
+                          ? "text-primary"
+                          : "text-loss"
+                      }`}
+                    >
+                      {formatCurrency(
+                        (formDirection === "long"
+                          ? parseFloat(formExitPrice) - parseFloat(formEntryPrice)
+                          : parseFloat(formEntryPrice) - parseFloat(formExitPrice)) *
+                          (parseFloat(formQuantity) || 1) *
+                          1000
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 备注 */}
+              <div className="mt-4 flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-muted">
+                  {language === "zh" ? "复盘笔记 / SOP 备注" : "Review Notes / SOP"}
+                </label>
+                <textarea
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  rows={3}
+                  placeholder={
+                    language === "zh"
+                      ? "记录交易思路、SOP 执行情况、情绪状态..."
+                      : "Record your trading thoughts, SOP execution, mindset..."
+                  }
+                  className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* 保存按钮 */}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="rounded-md border border-border bg-bg-elevated px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover"
+                >
+                  {language === "zh" ? "取消" : "Cancel"}
+                </button>
+                <button
+                  onClick={handleSaveTrade}
+                  className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  <Save size={16} />
+                  {language === "zh" ? "保存交易" : "Save Trade"}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </Layout>
   );

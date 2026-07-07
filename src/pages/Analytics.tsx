@@ -432,65 +432,60 @@ export default function Analytics() {
     };
   }, [dayOfWeekData, currency, language]);
 
-  // KPI 卡片定义
-  const stats = [
-    {
-      label: t.analyticsPage.totalTrades,
-      value: String(metrics.totalTrades),
-      icon: Activity,
-      color: "text-text-secondary",
-      bg: "bg-bg-elevated",
-    },
+  // ===== KPI 定义 =====
+  // Hero 卡内联指标(深色背景上展示)
+  const heroInline = [
     {
       label: t.analyticsPage.winRate,
       value: metrics.totalTrades > 0 ? `${metrics.winRate}%` : "—",
       icon: Target,
-      color: metrics.winRate >= 50 ? "text-primary" : "text-loss",
-      bg: metrics.winRate >= 50 ? "bg-primary/10" : "bg-loss/10",
+      good: metrics.winRate >= 50,
     },
     {
       label: t.analyticsPage.profitFactor,
       value: metrics.totalTrades > 0 ? metrics.profitFactor.toFixed(2) : "—",
       icon: Scale,
-      color: metrics.profitFactor >= 1 ? "text-primary" : "text-loss",
-      bg: metrics.profitFactor >= 1 ? "bg-primary/10" : "bg-loss/10",
-    },
-    {
-      label: t.analyticsPage.netPnl,
-      value: formatSignedCurrencyConverted(metrics.netPnl, currency, 0),
-      icon: DollarSign,
-      color: metrics.netPnl >= 0 ? "text-primary" : "text-loss",
-      bg: metrics.netPnl >= 0 ? "bg-primary/10" : "bg-loss/10",
+      good: metrics.profitFactor >= 1,
     },
     {
       label: t.analyticsPage.expectancy,
       value: metrics.totalTrades > 0 ? formatSignedCurrencyConverted(metrics.expectancy, currency, 0) : "—",
       icon: Zap,
-      color: metrics.expectancy >= 0 ? "text-primary" : "text-loss",
-      bg: metrics.expectancy >= 0 ? "bg-primary/10" : "bg-loss/10",
+      good: metrics.expectancy >= 0,
     },
     {
-      label: t.analyticsPage.maxDrawdown,
-      value: metrics.maxDrawdownAmount !== 0
-        ? `${metrics.maxDrawdownPercent}%`
-        : "—",
-      icon: AlertTriangle,
-      color: "text-loss",
-      bg: "bg-loss/10",
+      label: t.analyticsPage.totalTrades,
+      value: String(metrics.totalTrades),
+      icon: Activity,
+      good: null as boolean | null,
     },
+  ];
+
+  // 极值指标卡片
+  const extremeCards = [
     {
       label: t.analyticsPage.bestTrade,
       value: metrics.bestTrade !== 0 ? formatSignedCurrencyConverted(metrics.bestTrade, currency, 0) : "—",
       icon: TrendingUp,
       color: "text-primary",
-      bg: "bg-primary/10",
+      iconBg: "bg-primary/10 text-primary",
+      barClass: "from-primary/60 to-primary/0",
     },
     {
       label: t.analyticsPage.worstTrade,
       value: metrics.worstTrade !== 0 ? formatSignedCurrencyConverted(metrics.worstTrade, currency, 0) : "—",
       icon: TrendingDown,
       color: "text-loss",
-      bg: "bg-loss/10",
+      iconBg: "bg-loss/10 text-loss",
+      barClass: "from-loss/60 to-loss/0",
+    },
+    {
+      label: t.analyticsPage.maxDrawdown,
+      value: metrics.maxDrawdownAmount !== 0 ? `${metrics.maxDrawdownPercent}%` : "—",
+      icon: AlertTriangle,
+      color: "text-warning",
+      iconBg: "bg-warning/10 text-warning",
+      barClass: "from-warning/60 to-warning/0",
     },
   ];
 
@@ -509,8 +504,8 @@ export default function Analytics() {
     return (
       <Layout title={t.title.analytics}>
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-lg border border-border bg-bg-surface px-4 py-3">
+          {[...heroInline, ...extremeCards].map((s) => (
+            <div key={s.label} className="rounded-xl border border-border bg-bg-surface px-4 py-3">
               <div className="mb-1 text-xs font-medium text-text-muted">{s.label}</div>
               <div className="tj-number text-xl font-semibold text-text-muted">{s.value}</div>
             </div>
@@ -531,51 +526,110 @@ export default function Analytics() {
 
   return (
     <Layout title={t.title.analytics}>
-      {/* KPI 卡片行 (8 个) - 精致化设计 */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {stats.map((s) => {
+      {/* ===== Hero 总览卡:净盈亏 + 核心指标(深色高级质感) ===== */}
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 shadow-[0_16px_48px_-16px_rgba(15,23,42,0.5)]">
+        {/* 装饰性光斑 */}
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
+
+        <div className="relative flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:gap-10 lg:px-8">
+          {/* 净盈亏主体 */}
+          <div className="shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10">
+                <DollarSign className={`h-4 w-4 ${metrics.netPnl >= 0 ? "text-emerald-400" : "text-red-400"}`} />
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                {t.analyticsPage.netPnl}
+              </span>
+            </div>
+            <div
+              className={`tj-number mt-3 text-4xl font-bold tracking-tight lg:text-[42px] ${
+                metrics.netPnl >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {formatSignedCurrencyConverted(metrics.netPnl, currency, 0)}
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-500">
+              {language === "zh"
+                ? `基于 ${metrics.totalTrades} 笔已平仓交易`
+                : `Based on ${metrics.totalTrades} closed trades`}
+            </div>
+          </div>
+
+          {/* 分隔线 */}
+          <div className="hidden h-16 w-px bg-white/10 lg:block" />
+
+          {/* 核心指标内联 */}
+          <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+            {heroInline.map((s) => {
+              const Icon = s.icon;
+              return (
+                <div key={s.label} className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    <Icon className="h-3 w-3" />
+                    <span className="truncate">{s.label}</span>
+                  </div>
+                  <div
+                    className={`tj-number mt-2 text-xl font-bold tracking-tight lg:text-2xl ${
+                      s.good === null ? "text-slate-100" : s.good ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {s.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== 极值指标卡 ===== */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {extremeCards.map((s) => {
           const Icon = s.icon;
           return (
             <div
               key={s.label}
-              className="group relative overflow-hidden rounded-xl border border-border bg-bg-surface px-4 py-4 transition-all duration-200 hover:border-border/80 hover:shadow-sm"
+              className="group relative overflow-hidden rounded-2xl border border-border/70 bg-bg-surface px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]"
             >
-              {/* 背景装饰 */}
-              <div
-                className={`absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-5 blur-xl transition-opacity duration-300 group-hover:opacity-10 ${s.bg}`}
-              />
-              <div className="relative">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-                    {s.label}
-                  </span>
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${s.bg} transition-transform duration-200 group-hover:scale-110`}
-                  >
-                    <Icon className={`h-4 w-4 ${s.color}`} />
-                  </span>
-                </div>
-                <div className={`tj-number mt-2.5 text-2xl font-bold tracking-tight ${s.color}`}>
-                  {s.value}
-                </div>
+              {/* 顶部渐变装饰条 */}
+              <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${s.barClass}`} />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
+                  {s.label}
+                </span>
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.iconBg} transition-transform duration-300 group-hover:scale-110`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+              </div>
+              <div className={`tj-number mt-2 text-[26px] font-bold tracking-tight ${s.color}`}>
+                {s.value}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* 次级指标小卡片行 - 精致化 */}
-      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-        {subStats.map((s) => (
+      {/* ===== 次级指标条(整合式细分数据) ===== */}
+      <div className="mb-5 grid grid-cols-2 overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-3 lg:grid-cols-6">
+        {subStats.map((s, i) => (
           <div
             key={s.label}
-            className="rounded-lg border border-border bg-bg-surface/80 px-3.5 py-2.5 transition-all duration-200 hover:bg-bg-surface"
+            className={`px-4 py-3.5 transition-colors duration-200 hover:bg-bg-elevated/60 ${
+              i > 0 ? "border-l border-border/50" : ""
+            } ${i >= 2 ? "max-lg:border-t max-lg:border-border/50" : ""} ${
+              i % 2 === 0 ? "max-sm:border-l-0" : ""
+            } ${i % 3 === 0 ? "sm:max-lg:border-l-0" : ""}`}
           >
-            <div className="text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted">
               {s.label}
             </div>
             <div
-              className={`tj-number mt-1 text-sm font-bold ${s.positive ? "text-primary" : "text-loss"}`}
+              className={`tj-number mt-1.5 text-[15px] font-bold ${s.positive ? "text-primary" : "text-loss"}`}
             >
               {s.value}
             </div>
@@ -586,8 +640,8 @@ export default function Analytics() {
       {/* 图表网格 - 精致化卡片设计 */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 月度盈亏 + 累计曲线 */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                 <Award className="h-3.5 w-3.5 text-primary" />
@@ -603,8 +657,8 @@ export default function Analytics() {
         </div>
 
         {/* 胜率趋势 */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                 <Target className="h-3.5 w-3.5 text-primary" />
@@ -627,8 +681,8 @@ export default function Analytics() {
         </div>
 
         {/* 盈亏分布 */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-info/10">
                 <Activity className="h-3.5 w-3.5 text-info" />
@@ -644,8 +698,8 @@ export default function Analytics() {
         </div>
 
         {/* 多空分析环形图 */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
                 <Scale className="h-3.5 w-3.5 text-warning" />
@@ -692,8 +746,8 @@ export default function Analytics() {
         </div>
 
         {/* 星期表现 */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10">
                 <Flame className="h-3.5 w-3.5 text-warning" />
@@ -709,8 +763,8 @@ export default function Analytics() {
         </div>
 
         {/* 品种表现表格(带进度条) */}
-        <div className="group overflow-hidden rounded-xl border border-border bg-bg-surface transition-all duration-200 hover:border-border/80 hover:shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-5 py-3.5">
+        <div className="group overflow-hidden rounded-2xl border border-border/70 bg-bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-border hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-b from-bg-elevated/50 to-transparent px-5 py-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                 <TrendingUp className="h-3.5 w-3.5 text-primary" />
