@@ -13,9 +13,10 @@ export function calcMonthlyPerformance(trades: Trade[]) {
     const d = new Date(t.closeDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!byMonth[key]) byMonth[key] = { pnl: 0, wins: 0, total: 0 };
-    byMonth[key].pnl += t.pnl;
+    // 月度盈亏按净 P&L（含手续费）累计，与权益曲线一致
+    byMonth[key].pnl += t.pnl + (t.fee ?? 0);
     byMonth[key].total += 1;
-    if (t.pnl > 0) byMonth[key].wins += 1;
+    if (t.pnl + (t.fee ?? 0) > 0) byMonth[key].wins += 1;
   });
 
   let cumulative = 0;
@@ -148,11 +149,12 @@ export function calcStreaks(trades: Trade[]) {
   let curLoss = 0;
 
   closed.forEach((t) => {
-    if (t.pnl > 0) {
+    const net = t.pnl + (t.fee ?? 0);
+    if (net > 0) {
       curWin++;
       curLoss = 0;
       if (curWin > maxWinStreak) maxWinStreak = curWin;
-    } else if (t.pnl < 0) {
+    } else if (net < 0) {
       curLoss++;
       curWin = 0;
       if (curLoss > maxLossStreak) maxLossStreak = curLoss;
@@ -163,10 +165,12 @@ export function calcStreaks(trades: Trade[]) {
   const last = closed[closed.length - 1];
   let currentStreak = 0;
   if (last) {
-    const isWin = last.pnl > 0;
+    const lastNet = last.pnl + (last.fee ?? 0);
+    const isWin = lastNet > 0;
     for (let i = closed.length - 1; i >= 0; i--) {
-      if (isWin && closed[i].pnl > 0) currentStreak++;
-      else if (!isWin && closed[i].pnl < 0) currentStreak--;
+      const net = closed[i].pnl + (closed[i].fee ?? 0);
+      if (isWin && net > 0) currentStreak++;
+      else if (!isWin && net < 0) currentStreak--;
       else break;
     }
   }
@@ -188,7 +192,7 @@ export function calcMaxDrawdown(trades: Trade[], startingBalance = 0) {
   let maxDdPercent = 0;
 
   closed.forEach((t) => {
-    running += t.pnl;
+    running += t.pnl + (t.fee ?? 0);
     if (running > peak) peak = running;
     const ddAmount = running - peak;
     const ddPercent = peak > 0 ? (ddAmount / peak) * 100 : 0;
@@ -213,8 +217,9 @@ export function calcAnalyticsMetrics(trades: Trade[]) {
 
   const grossProfit = wins.reduce((s, t) => s + t.pnl, 0);
   const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
-  const netPnl = grossProfit - grossLoss;
   const totalFee = closed.reduce((s, t) => s + (t.fee ?? 0), 0);
+  // 净盈亏 = 毛利 - 毛损 + 手续费（手续费为负数，所以等于减去手续费绝对值）
+  const netPnl = grossProfit - grossLoss + totalFee;
 
   const totalTrades = closed.length;
   const winRate = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0;
