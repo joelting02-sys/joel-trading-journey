@@ -46,7 +46,7 @@ export default function Trades() {
       pnlTotal += tr.pnl;
       feeTotal += tr.fee ?? 0;
     }
-    return { pnlTotal, feeTotal, netTotal: pnlTotal + feeTotal, count: trades.length };
+    return { pnlTotal, feeTotal, netTotal: pnlTotal - Math.abs(feeTotal), count: trades.length };
   }, [trades]);
 
   const filtered = useMemo(() => {
@@ -147,8 +147,8 @@ export default function Trades() {
                   <td className={`px-3 py-2 text-right tj-number font-medium ${summary.pnlTotal >= 0 ? "text-primary" : "text-loss"}`}>
                     {formatSignedCurrencyConverted(summary.pnlTotal, currency)}
                   </td>
-                  <td className={`px-3 py-2 text-right tj-number ${summary.feeTotal < 0 ? "text-loss" : "text-text-muted"}`}>
-                    {summary.feeTotal !== 0 ? formatSignedCurrencyConverted(summary.feeTotal, currency) : "—"}
+                  <td className="px-3 py-2 text-right tj-number text-loss">
+                    {summary.feeTotal !== 0 ? formatSignedCurrencyConverted(-Math.abs(summary.feeTotal), currency) : "—"}
                   </td>
                   <td className={`px-3 py-2 text-right tj-number font-semibold ${summary.netTotal >= 0 ? "text-primary" : "text-loss"}`}>
                     {formatSignedCurrencyConverted(summary.netTotal, currency)}

@@ -6,10 +6,9 @@ export function filterTradesByAccount(trades: Trade[], accountId: string): Trade
   return trades.filter((t) => t.account === accountId);
 }
 
-// 净 P&L = 毛盈亏 + 手续费（手续费为负数，所以等于减去手续费绝对值）
-// 用于权益计算，确保总权益正确扣除手续费
+// 净 P&L = 毛盈亏 - 手续费（用 Math.abs 确保无论 fee 存正数还是负数都正确扣除）
 export function netForEquity(trade: Trade): number {
-  return trade.pnl + (trade.fee ?? 0);
+  return trade.pnl - Math.abs(trade.fee ?? 0);
 }
 
 // 计算账户权益（按净 P&L 累加）
