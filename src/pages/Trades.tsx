@@ -23,6 +23,7 @@ export default function Trades() {
   const accounts = useTradeStore((s) => s.accounts);
   const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const t = useSettings((s) => s.t());
+  const language = useSettings((s) => s.language);
   const currency = useSettings((s) => s.currency);
   const navigate = useNavigate();
 
@@ -36,6 +37,17 @@ export default function Trades() {
     if (accountFilter === "all") return allTrades;
     return allTrades.filter((tr) => tr.account === accountFilter);
   }, [allTrades, accountFilter]);
+
+  // 当前筛选集合的汇总：毛利(盈亏)、手续费、净盈亏 — 跟随账户筛选 + 搜索 + 排序实时更新
+  const summary = useMemo(() => {
+    let pnlTotal = 0;
+    let feeTotal = 0;
+    for (const tr of trades) {
+      pnlTotal += tr.pnl;
+      feeTotal += tr.fee ?? 0;
+    }
+    return { pnlTotal, feeTotal, netTotal: pnlTotal + feeTotal, count: trades.length };
+  }, [trades]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -121,6 +133,30 @@ export default function Trades() {
         {/* Table */}
         <div className="overflow-x-auto rounded-md border border-border bg-bg-surface">
           <table className="w-full min-w-[860px] border-collapse text-sm">
+            {/* 汇总行：紧贴表头之下，跟随账户筛选 + 搜索实时聚合 净盈亏 / 盈亏 / 手续费 */}
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr
+                  className="border-b border-border bg-primary/5 text-text"
+                  data-testid="trades-summary"
+                >
+                  <td className="px-3 py-2 font-mono font-medium" colSpan={5}>
+                    {language === "zh" ? "合计" : "Total"}{" "}
+                    <span className="text-text-muted">({summary.count})</span>
+                  </td>
+                  <td className={`px-3 py-2 text-right tj-number font-medium ${summary.pnlTotal >= 0 ? "text-primary" : "text-loss"}`}>
+                    {formatSignedCurrencyConverted(summary.pnlTotal, currency)}
+                  </td>
+                  <td className={`px-3 py-2 text-right tj-number ${summary.feeTotal < 0 ? "text-loss" : "text-text-muted"}`}>
+                    {summary.feeTotal !== 0 ? formatSignedCurrencyConverted(summary.feeTotal, currency) : "—"}
+                  </td>
+                  <td className={`px-3 py-2 text-right tj-number font-semibold ${summary.netTotal >= 0 ? "text-primary" : "text-loss"}`}>
+                    {formatSignedCurrencyConverted(summary.netTotal, currency)}
+                  </td>
+                  <td colSpan={6} />
+                </tr>
+              </tfoot>
+            )}
             <thead>
               <tr className="border-b border-border bg-bg-elevated text-left text-text-secondary">
                 <SortHeader
