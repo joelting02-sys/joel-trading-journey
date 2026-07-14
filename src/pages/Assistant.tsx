@@ -209,12 +209,24 @@ export default function Assistant() {
       // 直接覆盖 store(先清空再按 before + 新消息写回)
       clearChatMessages();
       before.forEach((m) => addChatMessage(m));
+      const extractedTrades = parseExtractedTrades(raw);
+      let content = sanitizeAiResponse(cleanResponse(raw), language);
+      const tradesBlockTruncated = /\[TRADES\]/i.test(raw) && !/\[\/TRADES\]/i.test(raw);
+      if (tradesBlockTruncated) {
+        content += language === "zh"
+          ? (extractedTrades?.length
+            ? `\n\n⚠️ AI 回复在多订单 JSON 中途被截断，已恢复其中 **${extractedTrades.length}** 笔可保存的交易。若数量不全，请分批上传截图后重试。`
+            : "\n\n⚠️ AI 回复在多订单 JSON 中途被截断，未能恢复可保存的交易。请分批上传截图后重试。")
+          : (extractedTrades?.length
+            ? `\n\n⚠️ The AI reply was truncated mid multi-trade JSON. Recovered **${extractedTrades.length}** savable trade(s). If some are missing, re-upload in smaller batches.`
+            : "\n\n⚠️ The AI reply was truncated mid multi-trade JSON and no savable trades could be recovered. Please re-upload in smaller batches.");
+      }
       addChatMessage({
         id: `a${Date.now()}`,
         role: "assistant",
-        content: sanitizeAiResponse(cleanResponse(raw), language),
+        content,
         timestamp: new Date().toISOString(),
-        extractedTrades: parseExtractedTrades(raw),
+        extractedTrades,
         sopProposals: parseSopProposals(raw),
       });
     } catch (err) {

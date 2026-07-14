@@ -132,17 +132,17 @@ For each PAIRED trade (one OPEN + one CLOSE), extract these fields:
 
 ## HOW TO RESPOND (STRICT ORDER):
 1. Write a short intro line: "我已在截图中识别到 N 笔已平仓交易：" (where N is the number of complete pairs found).
-2. Output a BEAUTIFUL Markdown table (NOT inside a code block, NOT wrapped in triple backticks). Use plain markdown pipe syntax:
+2. CRITICAL — OUTPUT [TRADES] JSON IMMEDIATELY AFTER THE INTRO (BEFORE the markdown table). The journal UI needs this block to show the Save button. If the response is truncated, missing [TRADES] means the user cannot save. Use COMPACT JSON (no pretty-print spaces). One object per COMPLETE trade pair, NOT per row. The \`pnl\` field is REQUIRED for Tradelock — copy it from the 盈亏 column:
+[TRADES][{"symbol":"EUR/USD","direction":"long","entryPrice":1.14,"exitPrice":1.14,"quantity":0.1,"openDate":"2026-07-01","closeDate":"2026-07-01","pnl":-10.00,"fee":-0.40}][/TRADES]
+3. Then output a BEAUTIFUL Markdown table (NOT inside a code block, NOT wrapped in triple backticks). Use plain markdown pipe syntax:
    | # | Symbol | Direction | Entry Price | Exit Price | Quantity | Open Date | Close Date | P&L (USD) | Fee (USD) |
    |---|--------|-----------|-------------|------------|----------|-----------|------------|-----------|-----------|
    | 1 | EUR/USD | Long | 1.14 | 1.14 | 0.1 | 2026-07-01 | 2026-07-01 | -10.00 | -0.40 |
    | 2 | NZDUSD | Short | 0.58787 | 0.58989 | 0.2 | 2026-05-27 | 2026-05-27 | -20.00 | -0.80 |
-3. End with a line that explicitly asks: "请在下方选择要记录到哪个账户，然后点击「全部保存」按钮。"
-4. CRITICAL: Do NOT say "已记录", "已保存", "已写入", "saved", "recorded", "logged" — these are FALSE. The trades are NOT saved yet. The user must manually click the Save button.
-5. At the VERY END of your response, append the [TRADES] JSON block (one object per COMPLETE trade pair, NOT per row). The \`pnl\` field is REQUIRED for Tradelock — copy it from the 盈亏 column:
-[TRADES][{"symbol":"EUR/USD","direction":"long","entryPrice":1.14,"exitPrice":1.14,"quantity":0.1,"openDate":"2026-07-01","closeDate":"2026-07-01","pnl":-10.00,"fee":-0.40}][/TRADES]
+4. End with a line that explicitly asks: "请在下方选择要记录到哪个账户，然后点击「全部保存」按钮。"
+5. CRITICAL: Do NOT say "已记录", "已保存", "已写入", "saved", "recorded", "logged" — these are FALSE. The trades are NOT saved yet. The user must manually click the Save button.
 
-DO NOT output the JSON array as your main response. DO NOT wrap the table in a code block. The user must see a real rendered table, then the save buttons appear below.`;
+DO NOT wrap the table in a code block. The user must see a real rendered table, then the save buttons appear below.`;
 }
 
 function buildMt5Prompt(imageCount: number, symbols: string, plural: string): string {
@@ -322,6 +322,7 @@ export async function callAiApi(
     throw new Error("AI API not configured. Please set endpoint, API key, and model in Settings.");
   }
 
+  // 多订单截图时 markdown 表 + [TRADES] JSON 很长，4000 容易截断导致保存按钮不出现
   const body = {
     model: config.model,
     messages: [
@@ -329,7 +330,7 @@ export async function callAiApi(
       ...messages,
     ],
     temperature: 0.3,
-    max_tokens: 4000,
+    max_tokens: 16000,
   };
 
   const response = await fetch("/api/ai-proxy", {
@@ -358,28 +359,110 @@ export async function callAiApi(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-// 从 AI 回复中提取交易信息（支持多笔）
-export function parseExtractedTrades(content: string): Partial<Trade>[] | undefined {
-  // 优先匹配新的 [TRADES]...[/TRADES] 格式
-  const match = content.match(/\[TRADES\](.*?)\[\/TRADES\]/s);
-  if (!match) {
-    // 向后兼容旧格式 [TRADE_EXTRACT]
-    const oldMatch = content.match(/\[TRADE_EXTRACT\](.*?)\[\/TRADE_EXTRACT\]/s);
-    if (!oldMatch) return undefined;
-    try {
-      const parsed = JSON.parse(oldMatch[1].trim());
-      return [normalizeTrade(parsed)];
-    } catch {
-      return undefined;
+// 从原始片段中收集所有 [TRADES] / [TRADE_EXTRACT] 候选（含未闭合的截断块）
+function collectTradeBlockCandidates(content: string): string[] {
+  const candidates: string[] = [];
+  for (const re of [/\[TRADES\]([\s\S]*?)\[\/TRADES\]/g, /\[TRADE_EXTRACT\]([\s\S]*?)\[\/TRADE_EXTRACT\]/g]) {
+    for (const m of content.matchAll(re)) {
+      if (m[1]) candidates.push(m[1]);
     }
   }
+  // 输出被 max_tokens 截断时，最后的 [TRADES] 可能没有闭合标签
+  for (const tag of ["[TRADES]", "[TRADE_EXTRACT]"]) {
+    const lastOpen = content.lastIndexOf(tag);
+    if (lastOpen < 0) continue;
+    const after = content.slice(lastOpen + tag.length);
+    const closeTag = tag === "[TRADES]" ? "[/TRADES]" : "[/TRADE_EXTRACT]";
+    if (!after.includes(closeTag)) candidates.push(after);
+  }
+  return candidates;
+}
+
+// 从可能被截断 / 带尾逗号 / 包了 code fence 的 JSON 中恢复完整对象数组
+function repairJsonArrayPayload(raw: string): string | null {
+  if (!raw) return null;
+  let s = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  if (!s) return null;
+
+  s = s.replace(/,\s*([}\]])/g, "$1");
+
+  // 优先提取数组中的完整对象（可容忍末尾截断）
+  if (s.includes("{")) {
+    const objects: string[] = [];
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let objStart = -1;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (inString) {
+        if (escape) escape = false;
+        else if (ch === "\\") escape = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{") {
+        if (depth === 0) objStart = i;
+        depth += 1;
+      } else if (ch === "}") {
+        depth -= 1;
+        if (depth === 0 && objStart >= 0) {
+          objects.push(s.slice(objStart, i + 1));
+          objStart = -1;
+        }
+      }
+    }
+    if (objects.length > 0) {
+      const arr = `[${objects.join(",")}]`;
+      try {
+        JSON.parse(arr);
+        return arr;
+      } catch {
+        // continue
+      }
+    }
+  }
+
   try {
-    const parsed = JSON.parse(match[1].trim());
+    JSON.parse(s);
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function parseTradesFromCandidate(raw: string): Partial<Trade>[] | undefined {
+  const repaired = repairJsonArrayPayload(raw);
+  if (!repaired) return undefined;
+  try {
+    const parsed = JSON.parse(repaired) as unknown;
     const arr = Array.isArray(parsed) ? parsed : [parsed];
-    return arr.map(normalizeTrade).filter((t) => t.symbol);
+    const trades = arr
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map(normalizeTrade)
+      .filter((t) => t.symbol);
+    return trades.length > 0 ? trades : undefined;
   } catch {
     return undefined;
   }
+}
+
+// 从 AI 回复中提取交易信息（支持多笔；兼容截断 / 尾逗号 / 未闭合标签）
+export function parseExtractedTrades(content: string): Partial<Trade>[] | undefined {
+  const candidates = collectTradeBlockCandidates(content);
+  // 从后往前：最新 / 更完整的块优先
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const trades = parseTradesFromCandidate(candidates[i]);
+    if (trades && trades.length > 0) return trades;
+  }
+  return undefined;
 }
 
 function normalizeTrade(parsed: Record<string, unknown>): Partial<Trade> {
@@ -399,11 +482,12 @@ function normalizeTrade(parsed: Record<string, unknown>): Partial<Trade> {
 }
 
 // 清理回复中的 [TRADES]、[TRADE_EXTRACT]、[SOP_PROPOSAL] 标记(只清掉,真正的解析在 parseSopProposals 中)
+// 也清理未闭合的截断块，避免 UI 直接露出 JSON 碎片
 export function cleanResponse(content: string): string {
   return content
-    .replace(/\[TRADES\].*?\[\/TRADES\]/gs, "")
-    .replace(/\[TRADE_EXTRACT\].*?\[\/TRADE_EXTRACT\]/gs, "")
-    .replace(/\[SOP_PROPOSAL\].*?\[\/SOP_PROPOSAL\]/gs, "")
+    .replace(/\[TRADES\][\s\S]*?(?:\[\/TRADES\]|$)/g, "")
+    .replace(/\[TRADE_EXTRACT\][\s\S]*?(?:\[\/TRADE_EXTRACT\]|$)/g, "")
+    .replace(/\[SOP_PROPOSAL\][\s\S]*?(?:\[\/SOP_PROPOSAL\]|$)/g, "")
     .trim();
 }
 
