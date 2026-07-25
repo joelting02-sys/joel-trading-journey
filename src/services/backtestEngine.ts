@@ -1,6 +1,6 @@
 import type { BacktestCandle, BacktestInput, BacktestOrder, BacktestResult } from "@/types/backtest";
 
-export const BACKTEST_ENGINE_VERSION = "1.0.0";
+export const BACKTEST_ENGINE_VERSION = "1.0.1";
 
 function round(value: number): number { return Number(value.toFixed(8)); }
 
@@ -31,7 +31,7 @@ export function runBacktest(input: BacktestInput): BacktestResult {
   let peak = equity;
   let maxDrawdown = 0;
   let maxDrawdownPercent = 0;
-  let position: { direction: "long" | "short"; time: number; price: number; quantity: number } | null = null;
+  let position: { direction: "long" | "short"; time: number; price: number; quantity: number; entryCommission: number } | null = null;
 
   const mark = (candle: BacktestCandle, unrealized = 0) => {
     const marked = equity + unrealized;
@@ -45,7 +45,8 @@ export function runBacktest(input: BacktestInput): BacktestResult {
     if (!position) return;
     const exitPrice = position.direction === "long" ? candle.close - slip : candle.close + slip;
     const grossPnl = position.direction === "long" ? (exitPrice - position.price) * position.quantity : (position.price - exitPrice) * position.quantity;
-    const totalCommission = commission * position.quantity * 2;
+    const exitCommission = commission * position.quantity;
+    const totalCommission = position.entryCommission + exitCommission;
     const totalSlippage = slip * position.quantity * 2;
     const netPnl = grossPnl - totalCommission;
     equity += netPnl;
@@ -62,8 +63,9 @@ export function runBacktest(input: BacktestInput): BacktestResult {
       const quantity = sizeFor(equity, candle);
       if (Number.isFinite(quantity) && quantity > 0) {
         const entryPrice = direction === "long" ? candle.close + slip : candle.close - slip;
-        equity -= commission * quantity;
-        position = { direction, time: candle.time, price: entryPrice, quantity };
+        const entryCommission = commission * quantity;
+        equity -= entryCommission;
+        position = { direction, time: candle.time, price: entryPrice, quantity, entryCommission };
       }
     }
     const unrealized = position ? (position.direction === "long" ? candle.close - position.price : position.price - candle.close) * position.quantity - commission * position.quantity : 0;
