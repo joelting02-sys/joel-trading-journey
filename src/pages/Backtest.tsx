@@ -4,15 +4,14 @@ import Layout from "@/components/Layout";
 import { useSettings } from "@/store/useSettings";
 import { useTradeStore } from "@/store/useTradeStore";
 import { fetchYahooCandles, type YahooRange } from "@/services/yahooFinance";
-import { runBacktest, type BacktestResult } from "@/services/backtestEngine";
-import type { BacktestCandle } from "@/types/backtest";
+import { runBacktest } from "@/services/backtestEngine";
+import type { BacktestCandle, BacktestResult } from "@/types/backtest";
 
 const ranges: YahooRange[] = ["6mo", "1y", "2y", "5y"];
 const symbols = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "US500", "AAPL", "BTC-USD"];
 function money(value: number, currency: string) { return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value); }
 function pct(value: number) { return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`; }
 function DrawdownChart({ result }: { result: BacktestResult }) { const values = result.equityCurve.map((p) => p.equity); if (!values.length) return <div className="flex h-full items-center justify-center text-sm text-text-muted">暂无曲线数据</div>; let peak = values[0]; const dd = values.map((v) => { peak = Math.max(peak, v); return peak ? ((v - peak) / peak) * 100 : 0; }); const min = Math.min(...dd, 0); const max = Math.max(...dd, 0.1); const points = dd.map((v, i) => `${(i / Math.max(dd.length - 1, 1)) * 100},${100 - ((v - min) / (max - min)) * 100}`).join(" "); return <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full"><line x1="0" y1="0" x2="100" y2="0" stroke="currentColor" strokeOpacity=".12" strokeDasharray="2 2" /><polyline points={points} fill="none" stroke="var(--color-loss)" strokeWidth="1.7" vectorEffect="non-scaling-stroke" /></svg>; }
-
 export default function Backtest() {
   const language = useSettings((s) => s.language); const currency = useSettings((s) => s.currency); const accounts = useTradeStore((s) => s.accounts); const activeAccountId = useTradeStore((s) => s.activeAccountId);
   const [symbol, setSymbol] = useState("EURUSD"); const [range, setRange] = useState<YahooRange>("1y"); const [equity, setEquity] = useState(String(accounts.find((a) => a.id === activeAccountId)?.balance || 10000)); const [commission, setCommission] = useState("0"); const [slippage, setSlippage] = useState("0"); const [result, setResult] = useState<BacktestResult | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
