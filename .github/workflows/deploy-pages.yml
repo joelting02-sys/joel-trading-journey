@@ -12,6 +12,10 @@ concurrency:
   group: cloudflare-pages-production
   cancel-in-progress: false
 
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
 jobs:
   deploy:
     name: Build and deploy production
@@ -41,11 +45,5 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: joel-trading-journey
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy with Wrangler
+        run: pnpm dlx wrangler@4 pages deploy dist --project-name=joel-trading-journey --branch=main
