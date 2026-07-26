@@ -1,6 +1,27 @@
 import type { Trade } from "@/types";
+import { useTradeStore } from "@/store/useTradeStore";
 
 // 从实际交易数据计算分析指标
+
+/** 单笔交易真正进入权益曲线的净盈亏。手续费无论存正数或负数都只扣一次。 */
+const netPnl = (trade: Trade): number =>
+  Number(trade.pnl || 0) - Math.abs(Number(trade.fee || 0));
+
+/**
+ * 数据分析页过去没有把账户起始资金传进来，最大回撤会从 0 开始计算。
+ * 例如先赚 100、再亏 50 会被算成 50% 回撤，而 10,000 账户实际只有约 0.5%。
+ * 这里优先使用显式传入值；旧调用则从当前账户安全读取起始余额。
+ */
+function resolveStartingBalance(trades: Trade[], explicit?: number): number {
+  if (Number.isFinite(explicit) && (explicit ?? 0) > 0) return explicit as number;
+
+  const state = useTradeStore.getState();
+  const tradeAccountId = trades.find((trade) => trade.account)?.account;
+  const account = state.accounts.find((item) => item.id === tradeAccountId)
+    ?? state.accounts.find((item) => item.id === state.activeAccountId);
+  const balance = Number(account?.balance ?? 0);
+  return Number.isFinite(balance) && balance > 0 ? balance : 0;
+}
 
 // 月度盈亏 + 胜率趋势 + 累计盈亏
 export function calcMonthlyPerformance(trades: Trade[]) {
@@ -13,10 +34,10 @@ export function calcMonthlyPerformance(trades: Trade[]) {
     const d = new Date(t.closeDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     if (!byMonth[key]) byMonth[key] = { pnl: 0, wins: 0, total: 0 };
-    // 月度盈亏按净 P&L（毛盈亏 - 手续费）累计，与权益曲线一致
-    byMonth[key].pnl += t.pnl - Math.abs(t.fee ?? 0);
+    const net = netPnl(t);
+    byMonth[key].pnl += net;
     byMonth[key].total += 1;
-    if (t.pnl - Math.abs(t.fee ?? 0) > 0) byMonth[key].wins += 1;
+    if (net > 0) byMonth[key].wins += 1;
   });
 
   let cumulative = 0;
@@ -50,10 +71,11 @@ export function calcPnlDistribution(trades: Trade[]) {
   ];
 
   closed.forEach((t) => {
-    const b = buckets.find((b) => t.pnl >= b.min && t.pnl < b.max);
+    const net = netPnl(t);
+    const b = buckets.find((bucket) => net >= bucket.min && net < bucket.max);
     if (b) {
       b.count += 1;
-      b.pnl += t.pnl;
+      b.pnl += net;
     }
   });
 
@@ -67,9 +89,10 @@ export function calcSymbolPerformance(trades: Trade[]) {
 
   closed.forEach((t) => {
     if (!bySymbol[t.symbol]) bySymbol[t.symbol] = { trades: 0, pnl: 0, wins: 0 };
+    const net = netPnl(t);
     bySymbol[t.symbol].trades += 1;
-    bySymbol[t.symbol].pnl += t.pnl;
-    if (t.pnl > 0) bySymbol[t.symbol].wins += 1;
+    bySymbol[t.symbol].pnl += net;
+    if (net > 0) bySymbol[t.symbol].wins += 1;
   });
 
   return Object.entries(bySymbol)
@@ -88,10 +111,10 @@ export function calcDirectionStats(trades: Trade[]) {
   const longs = closed.filter((t) => t.direction === "long");
   const shorts = closed.filter((t) => t.direction === "short");
 
-  const longPnl = longs.reduce((s, t) => s + t.pnl, 0);
-  const shortPnl = shorts.reduce((s, t) => s + t.pnl, 0);
-  const longWins = longs.filter((t) => t.pnl > 0).length;
-  const shortWins = shorts.filter((t) => t.pnl > 0).length;
+  const longPnl = longs.reduce((s, t) => s + netPnl(t), 0);
+  const shortPnl = shorts.reduce((s, t) => s + netPnl(t), 0);
+  const longWins = longs.filter((t) => netPnl(t) > 0).length;
+  const shortWins = shorts.filter((t) => netPnl(t) > 0).length;
 
   return {
     long: {
@@ -117,9 +140,10 @@ export function calcDayOfWeekPerformance(trades: Trade[]) {
   closed.forEach((t) => {
     const d = new Date(t.closeDate).getDay();
     if (!byDay[d]) byDay[d] = { pnl: 0, wins: 0, total: 0 };
-    byDay[d].pnl += t.pnl;
+    const net = netPnl(t);
+    byDay[d].pnl += net;
     byDay[d].total += 1;
-    if (t.pnl > 0) byDay[d].wins += 1;
+    if (net > 0) byDay[d].wins += 1;
   });
 
   // 只返回周一到周五(交易日常见)
@@ -139,7 +163,10 @@ export function calcDayOfWeekPerformance(trades: Trade[]) {
 export function calcStreaks(trades: Trade[]) {
   const closed = trades
     .filter((t) => t.status === "closed" && t.closeDate)
-    .sort((a, b) => new Date(a.closeDate).getTime() - new Date(b.closeDate).getTime());
+    .sort((a, b) => {
+      const dateDiff = new Date(a.closeDate).getTime() - new Date(b.closeDate).getTime();
+      return dateDiff || a.id.localeCompare(b.id);
+    });
 
   if (closed.length === 0) return { currentStreak: 0, maxWinStreak: 0, maxLossStreak: 0 };
 
@@ -149,7 +176,7 @@ export function calcStreaks(trades: Trade[]) {
   let curLoss = 0;
 
   closed.forEach((t) => {
-    const net = t.pnl - Math.abs(t.fee ?? 0);
+    const net = netPnl(t);
     if (net > 0) {
       curWin++;
       curLoss = 0;
@@ -165,35 +192,48 @@ export function calcStreaks(trades: Trade[]) {
   const last = closed[closed.length - 1];
   let currentStreak = 0;
   if (last) {
-    const lastNet = last.pnl - Math.abs(last.fee ?? 0);
+    const lastNet = netPnl(last);
     const isWin = lastNet > 0;
-    for (let i = closed.length - 1; i >= 0; i--) {
-      const net = closed[i].pnl - Math.abs(closed[i].fee ?? 0);
-      if (isWin && net > 0) currentStreak++;
-      else if (!isWin && net < 0) currentStreak--;
-      else break;
+    if (lastNet !== 0) {
+      for (let i = closed.length - 1; i >= 0; i--) {
+        const net = netPnl(closed[i]);
+        if (isWin && net > 0) currentStreak++;
+        else if (!isWin && net < 0) currentStreak--;
+        else break;
+      }
     }
   }
 
   return { currentStreak, maxWinStreak, maxLossStreak };
 }
 
-// 计算最大回撤(基于交易序列)
+/**
+ * 计算最大回撤（基于已实现净盈亏权益曲线）。
+ * 返回值沿用原 UI 约定：金额和百分比均为负数或 0。
+ */
 export function calcMaxDrawdown(trades: Trade[], startingBalance = 0) {
   const closed = trades
     .filter((t) => t.status === "closed" && t.closeDate)
-    .sort((a, b) => new Date(a.closeDate).getTime() - new Date(b.closeDate).getTime());
+    .sort((a, b) => {
+      const dateDiff = new Date(a.closeDate).getTime() - new Date(b.closeDate).getTime();
+      return dateDiff || a.id.localeCompare(b.id);
+    });
 
   if (closed.length === 0) return { maxDdPercent: 0, maxDdAmount: 0 };
 
-  let peak = startingBalance;
-  let running = startingBalance;
+  const initial = Number(startingBalance);
+  let peak = Number.isFinite(initial) && initial > 0 ? initial : 0;
+  let running = peak;
   let maxDdAmount = 0;
   let maxDdPercent = 0;
 
   closed.forEach((t) => {
-    running += t.pnl - Math.abs(t.fee ?? 0);
-    if (running > peak) peak = running;
+    running += netPnl(t);
+    if (running >= peak) {
+      peak = running;
+      return;
+    }
+
     const ddAmount = running - peak;
     const ddPercent = peak > 0 ? (ddAmount / peak) * 100 : 0;
     if (ddAmount < maxDdAmount) {
@@ -203,23 +243,23 @@ export function calcMaxDrawdown(trades: Trade[], startingBalance = 0) {
   });
 
   return {
-    maxDdPercent: Math.round(maxDdPercent * 10) / 10,
-    maxDdAmount: Math.round(maxDdAmount),
+    maxDdPercent: Math.round(maxDdPercent * 100) / 100,
+    maxDdAmount: Math.round(maxDdAmount * 100) / 100,
   };
 }
 
 // 汇总指标(扩展版)
-export function calcAnalyticsMetrics(trades: Trade[]) {
+export function calcAnalyticsMetrics(trades: Trade[], startingBalance?: number) {
   const closed = trades.filter((t) => t.status === "closed");
 
-  const wins = closed.filter((t) => t.pnl > 0);
-  const losses = closed.filter((t) => t.pnl < 0);
+  // 胜负、盈亏、期望值全部按净盈亏判定，避免小盈利被手续费吃掉后仍算胜单。
+  const wins = closed.filter((t) => netPnl(t) > 0);
+  const losses = closed.filter((t) => netPnl(t) < 0);
 
-  const grossProfit = wins.reduce((s, t) => s + t.pnl, 0);
-  const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
-  const totalFee = closed.reduce((s, t) => s + (t.fee ?? 0), 0);
-  // 净盈亏 = 毛利 - 毛损 - 手续费（用 Math.abs 确保无论 fee 存正数还是负数都正确扣除）
-  const netPnl = grossProfit - grossLoss - Math.abs(totalFee);
+  const grossProfit = wins.reduce((s, t) => s + netPnl(t), 0);
+  const grossLoss = Math.abs(losses.reduce((s, t) => s + netPnl(t), 0));
+  const totalFee = closed.reduce((s, t) => s + Math.abs(Number(t.fee || 0)), 0);
+  const totalNetPnl = closed.reduce((s, t) => s + netPnl(t), 0);
 
   const totalTrades = closed.length;
   const winRate = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0;
@@ -232,19 +272,19 @@ export function calcAnalyticsMetrics(trades: Trade[]) {
     ? (wins.length / totalTrades) * avgWin - (losses.length / totalTrades) * avgLoss
     : 0;
 
-  const pnls = closed.map((t) => t.pnl);
-  const bestTrade = pnls.length > 0 ? Math.max(...pnls) : 0;
-  const worstTrade = pnls.length > 0 ? Math.min(...pnls) : 0;
+  const netPnls = closed.map(netPnl);
+  const bestTrade = netPnls.length > 0 ? Math.max(...netPnls) : 0;
+  const worstTrade = netPnls.length > 0 ? Math.min(...netPnls) : 0;
 
   const streaks = calcStreaks(trades);
-  const drawdown = calcMaxDrawdown(trades);
+  const drawdown = calcMaxDrawdown(trades, resolveStartingBalance(trades, startingBalance));
 
   return {
     totalTrades,
     winRate: Math.round(winRate * 10) / 10,
     profitFactor: profitFactor === Infinity ? 0 : Math.round(profitFactor * 100) / 100,
     avgWinLoss: Math.round(avgWinLoss * 100) / 100,
-    netPnl: Math.round(netPnl),
+    netPnl: Math.round(totalNetPnl),
     totalFee: Math.round(totalFee),
     avgWin: Math.round(avgWin),
     avgLoss: Math.round(avgLoss),
