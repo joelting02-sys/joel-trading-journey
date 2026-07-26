@@ -1,57 +1,30 @@
-# React + TypeScript + Vite
+# JOEL · Trading Journal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Trading journal and analytics dashboard built with React, TypeScript, Vite, TailwindCSS, Chart.js, Zustand, and Supabase.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+pnpm install
+pnpm dev
+pnpm check
+pnpm build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Cloudflare Pages deployment
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Production deploys are handled by `.github/workflows/deploy-pages.yml` on every push to `main`.
 
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+The repository must have these GitHub Actions secrets configured:
+
+- `CLOUDFLARE_API_TOKEN`: token with Cloudflare Pages edit permission
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID that owns the Pages project
+
+The workflow runs `pnpm install --frozen-lockfile`, type-checks, builds `dist`, then uploads it to the `joel-trading-journey` Pages project. It also supports manual runs from the GitHub Actions tab.
+
+## App architecture
+
+- `src/pages/Analytics.tsx`: risk-first analytics dashboard
+- `src/utils/analytics.ts`: net P&L and account-aware metrics
+- `src/utils/drawdown.ts`: equity-based drawdown and underwater periods
+- `functions/api/`: Cloudflare Pages Functions for API proxy routes
