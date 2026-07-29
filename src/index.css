@@ -36,8 +36,11 @@ select:not([multiple]):focus { border-color: var(--color-primary); box-shadow: 0
 .tj-select-option:hover, .tj-select-option.is-highlight { background: var(--color-primary-ghost); }
 .tj-select-option:active { transform: scale(.985); }
 .tj-select-option.is-active { color: var(--color-primary); font-weight: 600; }
+.tj-clicked { animation: tjClickPulse 180ms cubic-bezier(.16,1,.3,1); }
+button:not(:disabled):active, a:active, select:not(:disabled):active, [role='button']:active { transform: scale(.985); }
+@keyframes tjClickPulse { 0% { filter: brightness(1); } 40% { filter: brightness(.94); } 100% { filter: brightness(1); } }
 @keyframes tjMenuIn { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .tj-sidebar-nav .nav-item, .tj-select-trigger, .tj-select-option, select:not([multiple]) { transition: none; transform: none; } .tj-select-menu { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tj-sidebar-nav .nav-item, .tj-select-trigger, .tj-select-option, select:not([multiple]) { transition: none; transform: none; } .tj-select-menu { animation: none; } .tj-clicked { animation: none; } button:not(:disabled):active, a:active, select:not(:disabled):active, [role='button']:active { transform: none; } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp .3s ease-out forwards; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
