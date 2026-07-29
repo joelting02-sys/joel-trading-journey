@@ -25,6 +25,19 @@ select:not([multiple]):focus { border-color: var(--color-primary); box-shadow: 0
 .tj-sidebar-nav .nav-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .tj-sidebar-nav .nav-item.is-active { box-shadow: inset 0 0 0 1px rgba(9,146,104,.08); }
 aside { overflow-x: hidden; }
+.tj-kpi-card, .tj-recent-trade, .tj-extraction-card { transition: transform 240ms cubic-bezier(.16,1,.3,1), box-shadow 240ms cubic-bezier(.16,1,.3,1), border-color 180ms cubic-bezier(.16,1,.3,1), background-color 180ms cubic-bezier(.16,1,.3,1); will-change: transform; }
+.tj-kpi-card:hover { transform: translateY(-3px) scale(1.012); border-color: rgba(9,146,104,.28); box-shadow: 0 12px 28px rgba(9,146,104,.1), 0 2px 8px rgba(0,0,0,.05); }
+.tj-kpi-card:hover .tj-number { transform: translateY(-1px); }
+.tj-kpi-card .tj-number { display: inline-block; transition: transform 240ms cubic-bezier(.16,1,.3,1); }
+.tj-recent-trade { border-radius: 6px; padding-inline: 8px; cursor: default; }
+.tj-recent-trade:hover { transform: translateX(4px); background: var(--color-primary-ghost); box-shadow: 0 6px 16px rgba(9,146,104,.07); }
+.tj-extraction-card { box-shadow: 0 4px 14px rgba(9,146,104,.06); }
+.tj-extraction-card:hover { transform: translateY(-2px); border-color: rgba(9,146,104,.5); box-shadow: 0 14px 30px rgba(9,146,104,.1), 0 3px 10px rgba(0,0,0,.05); }
+.tj-account-select { border-color: rgba(9,146,104,.55); box-shadow: 0 0 0 3px rgba(9,146,104,.08); transition: transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms cubic-bezier(.16,1,.3,1), border-color 180ms cubic-bezier(.16,1,.3,1); }
+.tj-account-select:hover, .tj-account-select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 4px rgba(9,146,104,.13), 0 5px 16px rgba(9,146,104,.08); }
+.tj-save-all { transition: transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms cubic-bezier(.16,1,.3,1), filter 180ms cubic-bezier(.16,1,.3,1); }
+.tj-save-all:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(9,146,104,.22); filter: brightness(1.03); }
+.tj-save-all:active { transform: translateY(0) scale(.985); }
 .tj-select-trigger { background: var(--color-bg-surface); border-color: var(--color-border); box-shadow: 0 1px 2px rgba(0,0,0,.03); transition: border-color 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms cubic-bezier(.16,1,.3,1), transform 180ms cubic-bezier(.16,1,.3,1); }
 .tj-select-trigger:hover { border-color: rgba(9,146,104,.42); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
 .tj-select-trigger.is-open { border-color: var(--color-primary); box-shadow: 0 0 0 4px rgba(9,146,104,.1), 0 4px 12px rgba(0,0,0,.06); }
@@ -41,7 +54,7 @@ aside { overflow-x: hidden; }
 button:not(:disabled):active, a:active, select:not(:disabled):active, [role='button']:active { transform: scale(.985); }
 @keyframes tjClickPulse { 0% { filter: brightness(1); } 40% { filter: brightness(.94); } 100% { filter: brightness(1); } }
 @keyframes tjMenuIn { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .tj-sidebar-nav .nav-item, .tj-select-trigger, .tj-select-option, select:not([multiple]) { transition: none; transform: none; } .tj-select-menu { animation: none; } .tj-clicked { animation: none; } button:not(:disabled):active, a:active, select:not(:disabled):active, [role='button']:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tj-sidebar-nav .nav-item, .tj-select-trigger, .tj-select-option, select:not([multiple]), .tj-kpi-card, .tj-recent-trade, .tj-extraction-card, .tj-account-select, .tj-save-all { transition: none; transform: none; } .tj-select-menu { animation: none; } .tj-clicked { animation: none; } button:not(:disabled):active, a:active, select:not(:disabled):active, [role='button']:active { transform: none; } }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp .3s ease-out forwards; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
