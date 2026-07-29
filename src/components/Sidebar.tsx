@@ -13,11 +13,12 @@ function NavIconRender({ icon }: { icon: NavIcon }) {
   return <LucideComp size={18} strokeWidth={1.8} />;
 }
 
-function resetMagnification(container: HTMLDivElement | null) {
+function resetMagnification(container: HTMLElement | null) {
   container?.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((item) => item.style.setProperty("--nav-scale", "1"));
 }
 
-function updateMagnification(container: HTMLDivElement, pointerY: number) {
+function updateMagnification(container: HTMLElement, pointerY: number) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   container.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((item) => {
     const rect = item.getBoundingClientRect();
     const distance = Math.abs(pointerY - (rect.top + rect.height / 2));
@@ -31,10 +32,10 @@ export default function Sidebar() {
   const t = useSettings((s) => s.t());
   const language = useSettings((s) => s.language);
   const location = useLocation();
-  const navRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const container = navRef.current;
+    const container = sidebarRef.current;
     if (!container) return;
     const handlePointerMove = (event: PointerEvent) => updateMagnification(container, event.clientY);
     const handlePointerLeave = () => resetMagnification(container);
@@ -54,14 +55,7 @@ export default function Sidebar() {
   ];
 
   const renderNavItem = (item: NavItem) => (
-    <NavLink
-      key={item.key}
-      to={item.path}
-      end={item.path === "/"}
-      data-nav-item
-      onClick={() => setSidebarOpen(false)}
-      className={({ isActive }) => `nav-item flex items-center gap-3 rounded-md px-4 py-2.5 font-body text-[13px] ${isActive ? "is-active bg-primary-ghost text-primary" : "text-text-secondary hover:bg-bg-hover hover:text-text"}`}
-    >
+    <NavLink key={item.key} to={item.path} end={item.path === "/"} data-nav-item onClick={() => setSidebarOpen(false)} className={({ isActive }) => `nav-item flex items-center gap-3 rounded-md px-4 py-2.5 font-body text-[13px] ${isActive ? "is-active bg-primary-ghost text-primary" : "text-text-secondary hover:bg-bg-hover hover:text-text"}`}>
       <NavIconRender icon={item.icon} />
       <span>{item.label}</span>
     </NavLink>
@@ -70,22 +64,15 @@ export default function Sidebar() {
   return (
     <>
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`fixed left-0 top-0 bottom-0 z-50 flex w-[220px] flex-col border-r border-border bg-bg-elevated transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside ref={sidebarRef} className={`fixed left-0 top-0 bottom-0 z-50 flex w-[220px] flex-col border-r border-border bg-bg-elevated transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center justify-between gap-2.5 px-4 pb-6 pt-5">
-          <div className="flex items-center gap-2.5">
-            <img src="/joel-logo.svg" alt="JOEL 2026" className="h-10 w-10 rounded-sm object-cover" />
-            <span className="font-display text-[11px] font-normal tracking-wide text-text-secondary">{language === "zh" ? "交易日志" : "Trading Journal"}</span>
-          </div>
+          <div className="flex items-center gap-2.5"><img src="/joel-logo.svg" alt="JOEL 2026" className="h-10 w-10 rounded-sm object-cover" /><span className="font-display text-[11px] font-normal tracking-wide text-text-secondary">{language === "zh" ? "交易日志" : "Trading Journal"}</span></div>
           <button aria-label="Close sidebar" className="text-text-secondary transition-colors duration-150 hover:text-text md:hidden" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
-        <nav ref={navRef} className="tj-sidebar-nav flex flex-1 flex-col gap-3 overflow-y-auto pb-2" aria-label={language === "zh" ? "主导航" : "Main navigation"}>
+        <nav className="tj-sidebar-nav flex flex-1 flex-col gap-3 overflow-y-auto pb-2" aria-label={language === "zh" ? "主导航" : "Main navigation"}>
           {navGroups.map((group) => <div key={group.key} className="flex flex-col gap-0.5"><div className="px-4 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">{group.label}</div>{group.items.map(renderNavItem)}</div>)}
         </nav>
-        <div className="border-t border-border-subtle px-0 py-2 pb-4">
-          <NavLink to="/settings" onClick={() => setSidebarOpen(false)} data-nav-item className={({ isActive }) => `nav-item flex items-center gap-3 rounded-md px-4 py-2.5 font-body text-[13px] ${isActive ? "is-active bg-primary-ghost text-primary" : "text-text-muted hover:bg-bg-hover hover:text-text"}`}>
-            <SettingsIcon size={18} strokeWidth={1.8} /><span>{t.nav.settings}</span>
-          </NavLink>
-        </div>
+        <div className="border-t border-border-subtle px-0 py-2 pb-4"><NavLink to="/settings" onClick={() => setSidebarOpen(false)} data-nav-item className={({ isActive }) => `nav-item flex items-center gap-3 rounded-md px-4 py-2.5 font-body text-[13px] ${isActive ? "is-active bg-primary-ghost text-primary" : "text-text-muted hover:bg-bg-hover hover:text-text"}`}><SettingsIcon size={18} strokeWidth={1.8} /><span>{t.nav.settings}</span></NavLink></div>
       </aside>
     </>
   );
