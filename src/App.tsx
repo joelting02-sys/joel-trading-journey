@@ -43,8 +43,10 @@ function playUiClick() {
   oscillator.stop(now + 0.06);
 }
 
-function isInteractiveTarget(target: EventTarget | null): target is HTMLElement {
-  return target instanceof HTMLElement && Boolean(target.closest("button, a, select, [role='button'], input[type='submit'], input[type='button']"));
+function getInteractiveTarget(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement
+    ? target.closest("button, a, select, [role='button'], input[type='submit'], input[type='button']")
+    : null;
 }
 
 export default function App() {
@@ -55,7 +57,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      const target = isInteractiveTarget(event.target);
+      const target = getInteractiveTarget(event.target);
       if (!target || target.closest(":disabled, [aria-disabled='true']")) return;
       target.classList.remove("tj-clicked");
       void target.offsetWidth;
@@ -65,7 +67,7 @@ export default function App() {
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
-      const target = isInteractiveTarget(event.target);
+      const target = getInteractiveTarget(event.target);
       if (!target || target.closest(":disabled, [aria-disabled='true']")) return;
       playUiClick();
     };
